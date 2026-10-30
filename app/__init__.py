@@ -1,0 +1,1 @@
+"""Semyzbay backend package."""

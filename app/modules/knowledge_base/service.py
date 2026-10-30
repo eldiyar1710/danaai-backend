@@ -1,0 +1,117 @@
+import asyncio
+from uuid import UUID
+
+from fastapi import HTTPException
+from qdrant_client import AsyncQdrantClient, models
+
+from app.core.config import Settings
+from app.modules.documents.embeddings import dense_model, sparse_model
+from app.modules.documents.indexer import DENSE_VECTOR, SPARSE_VECTOR
+from app.modules.knowledge_base.schemas import (
+    KnowledgeBaseStats,
+    SearchHit,
+    SearchRequest,
+    SearchResponse,
+)
+from app.modules.users.models import User, UserRole
+
+
+class KnowledgeBaseService:
+    def __init__(self, settings: Settings, qdrant: AsyncQdrantClient) -> None:
+        self.settings = settings
+        self.qdrant = qdrant
+
+    def tenant(self, actor: User, requested: UUID | None) -> UUID:
+        if actor.role == UserRole.SUPER_ADMIN:
+            if requested is None:
+                raise HTTPException(status_code=422, detail="organization_id is required")
+            return requested
+        if actor.organization_id is None:
+            raise HTTPException(status_code=403, detail="Tenant membership required")
+        if requested is not None and requested != actor.organization_id:
+            raise HTTPException(status_code=403, detail="Cross-tenant access denied")
+        return actor.organization_id
+
+    def active_filter(self, organization_id: UUID) -> models.Filter:
+        return models.Filter(
+            must=[
+                models.FieldCondition(
+                    key="organization_id",
+                    match=models.MatchValue(value=str(organization_id)),
+                ),
+                models.FieldCondition(
+                    key="approval_status", match=models.MatchValue(value="approved")
+                ),
+                models.FieldCondition(key="is_active", match=models.MatchValue(value="true")),
+            ]
+        )
+
+    async def search(self, actor: User, request: SearchRequest) -> SearchResponse:
+        organization_id = self.tenant(actor, request.organization_id)
+        if not await self.qdrant.collection_exists(self.settings.qdrant_collection):
+            return SearchResponse(results=[])
+        dense, sparse = await asyncio.gather(
+            asyncio.to_thread(
+                lambda: next(
+                    iter(dense_model(self.settings.embedding_model).query_embed(request.query))
+                )
+            ),
+            asyncio.to_thread(
+                lambda: next(
+                    iter(
+                        sparse_model(self.settings.sparse_embedding_model).query_embed(
+                            request.query
+                        )
+                    )
+                )
+            ),
+        )
+        tenant_filter = self.active_filter(organization_id)
+        response = await self.qdrant.query_points(
+            collection_name=self.settings.qdrant_collection,
+            prefetch=[
+                models.Prefetch(
+                    query=dense.tolist(),
+                    using=DENSE_VECTOR,
+                    filter=tenant_filter,
+                    limit=max(request.limit * 3, 20),
+                ),
+                models.Prefetch(
+                    query=models.SparseVector(
+                        indices=sparse.indices.tolist(), values=sparse.values.tolist()
+                    ),
+                    using=SPARSE_VECTOR,
+                    filter=tenant_filter,
+                    limit=max(request.limit * 3, 20),
+                ),
+            ],
+            query=models.FusionQuery(fusion=models.Fusion.RRF),
+            limit=request.limit,
+            with_payload=True,
+        )
+        results: list[SearchHit] = []
+        for point in response.points:
+            payload = point.payload or {}
+            results.append(
+                SearchHit(
+                    chunk_id=UUID(str(payload["chunk_id"])),
+                    document_id=UUID(str(payload["document_id"])),
+                    document_version_id=UUID(str(payload["document_version_id"])),
+                    text=str(payload["text"]),
+                    score=point.score,
+                    page_number=payload.get("page_number"),
+                    section_title=payload.get("section_title"),
+                )
+            )
+        return SearchResponse(results=results)
+
+    async def stats(self, actor: User, organization_id: UUID | None) -> KnowledgeBaseStats:
+        tenant_id = self.tenant(actor, organization_id)
+        if not await self.qdrant.collection_exists(self.settings.qdrant_collection):
+            return KnowledgeBaseStats(organization_id=tenant_id, active_chunks=0)
+        result = await self.qdrant.count(
+            collection_name=self.settings.qdrant_collection,
+            count_filter=self.active_filter(tenant_id),
+            exact=True,
+        )
+        return KnowledgeBaseStats(organization_id=tenant_id, active_chunks=result.count)

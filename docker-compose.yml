@@ -1,0 +1,131 @@
+name: semyzbay
+
+x-app-environment: &app-environment
+  APP_ENV: ${APP_ENV:-development}
+  DEBUG: ${DEBUG:-false}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-semyzbay}:${POSTGRES_PASSWORD:-change_me}@semyzbay-postgres:5432/${POSTGRES_DB:-semyzbay_db}
+  REDIS_URL: redis://semyzbay-redis:6379/0
+  QDRANT_URL: http://semyzbay-qdrant:6333
+  MINIO_ENDPOINT: semyzbay-minio:9000
+  MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-change_me}
+  MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-change_me}
+  MINIO_SECURE: "false"
+  JWT_SECRET_KEY: ${JWT_SECRET_KEY:-replace_with_at_least_32_random_characters}
+  CELERY_BROKER_URL: redis://semyzbay-redis:6379/1
+  CELERY_RESULT_BACKEND: redis://semyzbay-redis:6379/2
+
+services:
+  semyzbay-api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    environment: *app-environment
+    command: ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      semyzbay-postgres:
+        condition: service_healthy
+      semyzbay-redis:
+        condition: service_healthy
+      semyzbay-qdrant:
+        condition: service_healthy
+      semyzbay-minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready', timeout=5)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    networks: [semyzbay]
+
+  semyzbay-worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+    environment: *app-environment
+    depends_on:
+      semyzbay-postgres:
+        condition: service_healthy
+      semyzbay-redis:
+        condition: service_healthy
+      semyzbay-qdrant:
+        condition: service_healthy
+      semyzbay-minio:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [semyzbay]
+
+  semyzbay-postgres:
+    image: postgres:16.10-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-semyzbay_db}
+      POSTGRES_USER: ${POSTGRES_USER:-semyzbay}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks: [semyzbay]
+
+  semyzbay-redis:
+    image: redis:7.4.7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks: [semyzbay]
+
+  semyzbay-qdrant:
+    image: qdrant/qdrant:v1.15.5
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333'"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks: [semyzbay]
+
+  semyzbay-minio:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.minio
+      args:
+        MINIO_VERSION: RELEASE.2025-09-07T16-13-09Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-change_me}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-change_me}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks: [semyzbay]
+
+networks:
+  semyzbay:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  qdrant_data:
+  minio_data:

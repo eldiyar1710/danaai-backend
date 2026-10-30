@@ -1,0 +1,22 @@
+FROM golang:1.24.2-alpine AS builder
+
+ARG MINIO_VERSION=RELEASE.2025-09-07T16-13-09Z
+RUN apk add --no-cache ca-certificates git
+WORKDIR /src
+RUN wget --tries=3 --timeout=30 \
+        "https://codeload.github.com/minio/minio/tar.gz/refs/tags/${MINIO_VERSION}" \
+        -O /tmp/minio.tar.gz \
+    && tar -xzf /tmp/minio.tar.gz --strip-components=1 \
+    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/minio .
+
+FROM alpine:3.22.2
+RUN apk add --no-cache ca-certificates curl \
+    && addgroup -S -g 10001 minio \
+    && adduser -S -D -H -u 10001 -G minio minio \
+    && mkdir -p /data \
+    && chown minio:minio /data
+COPY --from=builder /out/minio /usr/local/bin/minio
+USER minio
+EXPOSE 9000 9001
+ENTRYPOINT ["minio"]
+CMD ["server", "/data", "--console-address", ":9001"]
