@@ -41,8 +41,12 @@ def test_default_embedding_configuration_uses_openai() -> None:
     assert settings.qdrant_collection == "semyzbay_documents_v2"
 
 
-def test_default_voice_agent_configuration_uses_current_openai_models() -> None:
+def test_default_voice_agent_configuration_uses_elevenlabs_with_openai_fallback() -> None:
     settings = Settings()
+    assert settings.stt_provider == "elevenlabs"
+    assert settings.tts_provider == "elevenlabs"
+    assert settings.elevenlabs_stt_model == "scribe_v2"
+    assert settings.elevenlabs_tts_model == "eleven_v4_turbo"
     assert settings.stt_model == "gpt-transcribe"
     assert settings.tts_model == "gpt-realtime-2.1-mini"
     assert settings.tts_voice == "marin"

@@ -51,14 +51,22 @@ class Settings(BaseSettings):
     rag_neighbor_window: int = Field(default=1, ge=0, le=3)
     rag_allow_suspicious_context: bool = False
 
-    stt_provider: Literal["openai"] = "openai"
+    stt_provider: Literal["elevenlabs", "openai"] = "elevenlabs"
+    stt_fallback_provider: Literal["openai"] = "openai"
     stt_model: str = "gpt-transcribe"
-    tts_provider: Literal["openai_realtime"] = "openai_realtime"
+    tts_provider: Literal["elevenlabs", "openai_realtime"] = "elevenlabs"
+    tts_fallback_provider: Literal["openai_realtime"] = "openai_realtime"
     tts_model: str = "gpt-realtime-2.1-mini"
     tts_voice: Literal[
         "alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse", "marin", "cedar"
     ] = "marin"
     tts_speed: float = Field(default=1.0, ge=0.25, le=1.5)
+    elevenlabs_api_key: SecretStr | None = None
+    elevenlabs_base_url: AnyHttpUrl = AnyHttpUrl("https://api.elevenlabs.io/v1")
+    elevenlabs_stt_model: str = "scribe_v2"
+    elevenlabs_tts_model: str = "eleven_v4_turbo"
+    elevenlabs_voice_id: str | None = None
+    elevenlabs_output_format: str = "mp3_44100_128"
 
     minio_endpoint: str = "localhost:9000"
     minio_access_key: SecretStr = SecretStr("change_me")

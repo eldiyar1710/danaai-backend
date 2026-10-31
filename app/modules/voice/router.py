@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.core.dependencies import get_app_settings, get_current_user, get_db_session
-from app.integrations.openai_audio import OpenAIAudioClient
 from app.integrations.openai_client import OpenAIResponsesClient
+from app.integrations.voice_audio import VoiceAudioClient
 from app.modules.conversations.service import ConversationService
 from app.modules.knowledge_base.service import KnowledgeBaseService
 from app.modules.rag.reranker import create_reranker
@@ -35,7 +35,7 @@ def service(
         settings,
         cast(Minio, request.app.state.minio),
         conversations,
-        OpenAIAudioClient(settings),
+        VoiceAudioClient(settings),
     )
 
 
@@ -71,7 +71,7 @@ async def get_voice_answer(
         content=content,
         media_type=content_type,
         headers={
-            "Content-Disposition": f'inline; filename="voice-answer-{message_id}.wav"',
+            "Content-Disposition": f'inline; filename="voice-answer-{message_id}"',
             "X-AI-Generated-Voice": "true",
         },
     )

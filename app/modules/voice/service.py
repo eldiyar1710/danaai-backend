@@ -9,7 +9,8 @@ from fastapi import HTTPException, status
 from minio import Minio
 
 from app.core.config import Settings
-from app.integrations.openai_audio import AudioProviderError, OpenAIAudioClient
+from app.integrations.openai_audio import AudioProviderError
+from app.integrations.voice_audio import VoiceAudioClient
 from app.modules.conversations.models import MessageRole
 from app.modules.conversations.schemas import ChatRequest
 from app.modules.conversations.service import ConversationService
@@ -24,7 +25,7 @@ class VoiceService:
         settings: Settings,
         storage: Minio,
         conversations: ConversationService,
-        audio: OpenAIAudioClient,
+        audio: VoiceAudioClient,
     ) -> None:
         self.settings = settings
         self.storage = storage
@@ -78,16 +79,20 @@ class VoiceService:
                 detail="Speech synthesis provider failed",
             ) from exc
         output_path = (
-            f"{tenant_id}/{actor.id}/{chat.conversation_id}/{chat.message_id}/answer.wav"
+            f"{tenant_id}/{actor.id}/{chat.conversation_id}/{chat.message_id}/"
+            f"answer.{output.extension}"
         )
-        await self._put(output_path, output, "audio/wav")
+        await self._put(output_path, output.content, output.content_type)
         await self.conversations.attach_audio(actor, chat.message_id, output_path)
         return VoiceChatResponse(
             **chat.model_dump(),
             transcript=transcript,
             audio=VoiceAudioResponse(
                 url=f"{self.settings.api_v1_prefix}/voice/messages/{chat.message_id}/audio",
-                voice=self.settings.tts_voice,
+                content_type=output.content_type,
+                provider=output.provider,
+                model=output.model,
+                voice=output.voice,
             ),
         )
 
@@ -96,7 +101,7 @@ class VoiceService:
         if (
             message.role != MessageRole.ASSISTANT
             or not message.audio_path
-            or not message.audio_path.endswith("/answer.wav")
+            or not Path(message.audio_path).name.startswith("answer.")
         ):
             raise HTTPException(status_code=404, detail="Audio response not found")
         try:
@@ -110,7 +115,8 @@ class VoiceService:
                 response.release_conn()
         except Exception as exc:
             raise HTTPException(status_code=502, detail="Audio storage request failed") from exc
-        return content, "audio/wav"
+        content_type = "audio/mpeg" if message.audio_path.endswith(".mp3") else "audio/wav"
+        return content, content_type
 
     async def _put(self, path: str, content: bytes, content_type: str) -> None:
         bucket = self.settings.minio_audio_bucket

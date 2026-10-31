@@ -98,10 +98,12 @@ and persists accepted sources alongside the assistant message. The SSE endpoint 
 validation completes so ungrounded model output is never streamed to clients.
 
 `POST /voice/ask` accepts FLAC, MP3, MP4, MPEG, MPGA, M4A, OGG, WAV, or WEBM up to 25 MB.
-It uses `gpt-transcribe` for recorded speech and `gpt-realtime-2.1-mini` with the `marin`
-voice for audio output. The JSON response includes the transcript, grounded answer, sources,
-and an authenticated relative audio URL. Clients must disclose that the played voice is
-AI-generated; the audio download also returns `X-AI-Generated-Voice: true`.
+When configured, it uses ElevenLabs `scribe_v2` for recorded speech and
+`eleven_v4_turbo` for Kazakh/Russian voice output. OpenAI `gpt-transcribe` and
+`gpt-realtime-2.1-mini` remain automatic fallbacks when ElevenLabs credentials are absent or
+the primary provider fails. The JSON response identifies the actual provider, model, format,
+transcript, grounded answer, sources, and authenticated audio URL. Clients must disclose that
+the played voice is AI-generated; downloads return `X-AI-Generated-Voice: true`.
 
 The former public MinIO Community container registry stopped allowing anonymous pulls in
 2026. For reproducible local development, Compose builds the last pinned AGPL Community
