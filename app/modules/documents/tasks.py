@@ -2,7 +2,8 @@ import asyncio
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 
 import app.models  # noqa: F401
 from app.core.config import get_settings
@@ -108,23 +109,34 @@ async def _process(document_id: UUID, version_id: UUID, job_id: UUID) -> None:
                         job.completed_at = datetime.now(UTC)
                         await session.commit()
                     return
-                await session.execute(
-                    delete(DocumentChunk).where(DocumentChunk.document_version_id == version.id)
-                )
-                session.add_all(
-                    DocumentChunk(
-                        id=point_id,
-                        organization_id=document.organization_id,
-                        document_id=document.id,
-                        document_version_id=version.id,
-                        qdrant_point_id=point_id,
-                        chunk_index=chunk.index,
-                        text=chunk.text,
-                        page_number=chunk.page_number,
-                        section_title=chunk.section_title,
-                        section_number=chunk.section_number,
-                    )
+                chunk_rows = [
+                    {
+                        "id": point_id,
+                        "organization_id": document.organization_id,
+                        "document_id": document.id,
+                        "document_version_id": version.id,
+                        "qdrant_point_id": point_id,
+                        "chunk_index": chunk.index,
+                        "text": chunk.text,
+                        "page_number": chunk.page_number,
+                        "section_title": chunk.section_title,
+                        "section_number": chunk.section_number,
+                    }
                     for point_id, chunk in zip(point_ids, chunks, strict=True)
+                ]
+                statement = insert(DocumentChunk).values(chunk_rows)
+                await session.execute(
+                    statement.on_conflict_do_update(
+                        index_elements=[DocumentChunk.id],
+                        set_={
+                            "qdrant_point_id": statement.excluded.qdrant_point_id,
+                            "chunk_index": statement.excluded.chunk_index,
+                            "text": statement.excluded.text,
+                            "page_number": statement.excluded.page_number,
+                            "section_title": statement.excluded.section_title,
+                            "section_number": statement.excluded.section_number,
+                        },
+                    )
                 )
                 job.status, job.progress = JobStatus.SUCCEEDED, 100
                 job.completed_at = datetime.now(UTC)

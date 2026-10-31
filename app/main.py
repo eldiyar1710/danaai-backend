@@ -16,6 +16,7 @@ from app.integrations.minio_client import create_minio_client
 from app.integrations.qdrant_client import create_qdrant_client
 from app.integrations.redis_client import create_redis_client
 from app.modules.auth.router import router as auth_router
+from app.modules.conversations.router import router as conversations_router
 from app.modules.documents.router import router as documents_router
 from app.modules.knowledge_base.router import router as knowledge_base_router
 from app.modules.organizations.router import router as organizations_router
@@ -57,6 +58,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     register_exception_handlers(application)
     application.include_router(auth_router, prefix=app_settings.api_v1_prefix)
+    application.include_router(conversations_router, prefix=app_settings.api_v1_prefix)
     application.include_router(documents_router, prefix=app_settings.api_v1_prefix)
     application.include_router(knowledge_base_router, prefix=app_settings.api_v1_prefix)
     application.include_router(organizations_router, prefix=app_settings.api_v1_prefix)

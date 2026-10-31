@@ -82,6 +82,7 @@ class DocumentIndexer:
                     "document_id": str(document.id),
                     "document_version_id": str(version_id),
                     "chunk_id": str(point_id),
+                    "chunk_index": chunks[index].index,
                     "approval_status": "approved" if active else "pending",
                     "is_active": "true" if active else "false",
                     "language": document.language,

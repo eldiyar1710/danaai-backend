@@ -14,6 +14,7 @@ def hit(text: str, score: float = 0.5) -> SearchHit:
         chunk_id=uuid4(),
         document_id=uuid4(),
         document_version_id=uuid4(),
+        chunk_index=0,
         text=text,
         score=score,
     )

@@ -10,6 +10,8 @@ from app.modules.documents.indexer import (
     set_version_active,
 )
 from app.modules.documents.models import ApprovalStatus, Document, DocumentStatus
+from app.modules.knowledge_base.service import KnowledgeBaseService
+from app.modules.users.models import User, UserRole
 
 
 class FakeIndexer(DocumentIndexer):
@@ -63,6 +65,28 @@ async def test_replace_and_activate_version_in_qdrant() -> None:
             exact=True,
         )
         assert active.count == 2
+
+        actor = User(
+            id=uuid4(),
+            organization_id=document.organization_id,
+            email="admin@example.com",
+            hashed_password="not-used",
+            first_name="Test",
+            last_name="Admin",
+            role=UserRole.ORG_ADMIN,
+            is_active=True,
+        )
+        fetched = await KnowledgeBaseService(settings, client).fetch_chunks(
+            actor,
+            None,
+            {(version_id, 0), (version_id, 1), (version_id, 99)},
+        )
+        assert set(fetched) == {(version_id, 0), (version_id, 1)}
+        assert fetched[(version_id, 1)].text == "Check guards."
+        actor.organization_id = uuid4()
+        assert not await KnowledgeBaseService(settings, client).fetch_chunks(
+            actor, None, {(version_id, 0)}
+        )
 
         replacement_ids = await FakeIndexer(
             settings, client, initialize_models=False

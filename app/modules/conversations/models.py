@@ -2,7 +2,7 @@ import enum
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, Index, String, Text
+from sqlalchemy import DateTime, Enum, Float, ForeignKey, Index, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -50,7 +50,9 @@ class Message(UUIDPrimaryKeyMixin, Base):
     generation_status: Mapped[GenerationStatus] = mapped_column(
         Enum(GenerationStatus, name="generation_status")
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
 
 class MessageSource(UUIDPrimaryKeyMixin, Base):

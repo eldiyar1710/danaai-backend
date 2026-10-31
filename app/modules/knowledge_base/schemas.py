@@ -13,10 +13,12 @@ class SearchHit(BaseModel):
     chunk_id: UUID
     document_id: UUID
     document_version_id: UUID
+    chunk_index: int | None = Field(default=None, ge=0)
     text: str
     score: float
     page_number: int | None = None
     section_title: str | None = None
+    section_number: str | None = None
 
 
 class SearchResponse(BaseModel):

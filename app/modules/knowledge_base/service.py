@@ -1,5 +1,6 @@
 import asyncio
-from uuid import UUID
+from collections.abc import Iterable
+from uuid import UUID, uuid5
 
 from fastapi import HTTPException
 from qdrant_client import AsyncQdrantClient, models
@@ -97,13 +98,68 @@ class KnowledgeBaseService:
                     chunk_id=UUID(str(payload["chunk_id"])),
                     document_id=UUID(str(payload["document_id"])),
                     document_version_id=UUID(str(payload["document_version_id"])),
+                    chunk_index=(
+                        int(payload["chunk_index"])
+                        if payload.get("chunk_index") is not None
+                        else None
+                    ),
                     text=str(payload["text"]),
                     score=point.score,
                     page_number=payload.get("page_number"),
                     section_title=payload.get("section_title"),
+                    section_number=payload.get("section_number"),
                 )
             )
         return SearchResponse(results=results)
+
+    async def fetch_chunks(
+        self,
+        actor: User,
+        organization_id: UUID | None,
+        references: Iterable[tuple[UUID, int]],
+    ) -> dict[tuple[UUID, int], SearchHit]:
+        """Fetch deterministic neighboring chunks and re-check tenant/approval state."""
+        tenant_id = self.tenant(actor, organization_id)
+        requested = {(version_id, index) for version_id, index in references if index >= 0}
+        if not requested or not await self.qdrant.collection_exists(
+            self.settings.qdrant_collection
+        ):
+            return {}
+        point_ids = [uuid5(version_id, str(index)) for version_id, index in requested]
+        points = await self.qdrant.retrieve(
+            collection_name=self.settings.qdrant_collection,
+            ids=point_ids,
+            with_payload=True,
+            with_vectors=False,
+        )
+        chunks: dict[tuple[UUID, int], SearchHit] = {}
+        for point in points:
+            payload = point.payload or {}
+            if (
+                payload.get("organization_id") != str(tenant_id)
+                or payload.get("approval_status") != "approved"
+                or payload.get("is_active") != "true"
+            ):
+                continue
+            version_id = UUID(str(payload["document_version_id"]))
+            if payload.get("chunk_index") is None:
+                continue
+            chunk_index = int(payload["chunk_index"])
+            key = (version_id, chunk_index)
+            if key not in requested:
+                continue
+            chunks[key] = SearchHit(
+                chunk_id=UUID(str(payload["chunk_id"])),
+                document_id=UUID(str(payload["document_id"])),
+                document_version_id=version_id,
+                chunk_index=chunk_index,
+                text=str(payload["text"]),
+                score=0.0,
+                page_number=payload.get("page_number"),
+                section_title=payload.get("section_title"),
+                section_number=payload.get("section_number"),
+            )
+        return chunks
 
     async def stats(self, actor: User, organization_id: UUID | None) -> KnowledgeBaseStats:
         tenant_id = self.tenant(actor, organization_id)

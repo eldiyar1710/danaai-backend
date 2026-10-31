@@ -43,8 +43,10 @@ class Settings(BaseSettings):
     rag_retrieval_limit: int = Field(default=30, ge=1, le=50)
     rag_rerank_limit: int = Field(default=8, ge=1, le=20)
     rag_min_relevance_score: float = Field(default=0.05, ge=0, le=1)
-    rag_max_context_chars: int = Field(default=12000, ge=500, le=50000)
+    rag_max_context_chars: int = Field(default=8000, ge=500, le=50000)
     rag_max_context_chunks: int = Field(default=8, ge=1, le=20)
+    rag_seed_limit: int = Field(default=4, ge=1, le=20)
+    rag_neighbor_window: int = Field(default=1, ge=0, le=3)
     rag_allow_suspicious_context: bool = False
 
     minio_endpoint: str = "localhost:9000"
@@ -90,6 +92,8 @@ class Settings(BaseSettings):
             raise ValueError("RAG_RERANK_LIMIT cannot exceed RAG_RETRIEVAL_LIMIT")
         if self.rag_max_context_chunks > self.rag_rerank_limit:
             raise ValueError("RAG_MAX_CONTEXT_CHUNKS cannot exceed RAG_RERANK_LIMIT")
+        if self.rag_seed_limit > self.rag_rerank_limit:
+            raise ValueError("RAG_SEED_LIMIT cannot exceed RAG_RERANK_LIMIT")
         return self
 
 

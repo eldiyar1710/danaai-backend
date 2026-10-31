@@ -72,6 +72,9 @@ Authentication and administration routes are exposed below `/api/v1`:
 - `DELETE /documents/{document_id}` (controlled cross-store deletion)
 - `POST /knowledge-base/search`, `GET /knowledge-base/stats`
 - `POST /rag/retrieve` (safe retrieval package for the future chat/generation API)
+- `POST /chat/messages`, `POST /chat/messages/stream`
+- `POST /conversations`, `GET /conversations`
+- `GET /conversations/{conversation_id}/messages`
 
 The development defaults use the lightweight FastEmbed multilingual MiniLM embedding model
 and deterministic lexical reranking. Set `RERANKER_PROVIDER=fastembed` to enable the
@@ -83,6 +86,11 @@ each configured model downloads its artifacts.
 tenant authorization as knowledge-base search. Retrieved text that resembles an instruction
 override is excluded by default. Generation code must treat the returned `context` as
 untrusted quoted data and validate final-answer citations with the RAG citation validator.
+
+Grounded chat calls the OpenAI Responses API with `store=false`, refuses generation when
+approved context is insufficient, validates every `[S#]` citation before returning an answer,
+and persists accepted sources alongside the assistant message. The SSE endpoint buffers until
+validation completes so ungrounded model output is never streamed to clients.
 
 The former public MinIO Community container registry stopped allowing anonymous pulls in
 2026. For reproducible local development, Compose builds the last pinned AGPL Community
