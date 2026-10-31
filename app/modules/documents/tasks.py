@@ -60,6 +60,7 @@ async def _process(document_id: UUID, version_id: UUID, job_id: UUID) -> None:
                 await session.commit()
                 return
             job.status, job.progress = JobStatus.RUNNING, 10
+            job.error_message = None
             version.processing_status = ProcessingStatus.RUNNING
             document.status = DocumentStatus.PROCESSING
             await session.commit()
@@ -139,6 +140,7 @@ async def _process(document_id: UUID, version_id: UUID, job_id: UUID) -> None:
                     )
                 )
                 job.status, job.progress = JobStatus.SUCCEEDED, 100
+                job.error_message = None
                 job.completed_at = datetime.now(UTC)
                 version.processing_status = ProcessingStatus.SUCCEEDED
                 document.status = DocumentStatus.READY

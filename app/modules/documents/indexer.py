@@ -3,10 +3,11 @@ from collections.abc import Sequence
 from uuid import UUID, uuid5
 
 from qdrant_client import AsyncQdrantClient, models
+from qdrant_client.http.exceptions import UnexpectedResponse
 
 from app.core.config import Settings
 from app.modules.documents.chunker import TextChunk
-from app.modules.documents.embeddings import dense_model, sparse_model
+from app.modules.documents.embeddings import embed_dense, sparse_model
 from app.modules.documents.models import Document
 
 DENSE_VECTOR = "dense"
@@ -23,25 +24,29 @@ class DocumentIndexer:
     ) -> None:
         self.settings = settings
         self.client = client
-        self._dense = dense_model(settings.embedding_model) if initialize_models else None
         self._sparse = sparse_model(settings.sparse_embedding_model) if initialize_models else None
 
     async def ensure_collection(self) -> None:
         if await self.client.collection_exists(self.settings.qdrant_collection):
             return
-        await self.client.create_collection(
-            collection_name=self.settings.qdrant_collection,
-            vectors_config={
-                DENSE_VECTOR: models.VectorParams(
-                    size=self.settings.embedding_dimension, distance=models.Distance.COSINE
-                )
-            },
-            sparse_vectors_config={
-                SPARSE_VECTOR: models.SparseVectorParams(
-                    index=models.SparseIndexParams(on_disk=False), modifier=models.Modifier.IDF
-                )
-            },
-        )
+        try:
+            await self.client.create_collection(
+                collection_name=self.settings.qdrant_collection,
+                vectors_config={
+                    DENSE_VECTOR: models.VectorParams(
+                        size=self.settings.embedding_dimension, distance=models.Distance.COSINE
+                    )
+                },
+                sparse_vectors_config={
+                    SPARSE_VECTOR: models.SparseVectorParams(
+                        index=models.SparseIndexParams(on_disk=False), modifier=models.Modifier.IDF
+                    )
+                },
+            )
+        except UnexpectedResponse:
+            # Multiple workers may initialize a new blue-green collection concurrently.
+            if not await self.client.collection_exists(self.settings.qdrant_collection):
+                raise
         for field in (
             "organization_id",
             "document_id",
@@ -115,16 +120,15 @@ class DocumentIndexer:
         return point_ids
 
     async def embed(self, texts: list[str]) -> tuple[list[list[float]], list[models.SparseVector]]:
-        if self._dense is None or self._sparse is None:
+        if self._sparse is None:
             raise RuntimeError("Embedding models are not initialized")
-        dense_model_instance = self._dense
         sparse_model_instance = self._sparse
         dense_raw, sparse_raw = await asyncio.gather(
-            asyncio.to_thread(lambda: list(dense_model_instance.embed(texts))),
+            embed_dense(self.settings, texts),
             asyncio.to_thread(lambda: list(sparse_model_instance.embed(texts))),
         )
         return (
-            [vector.tolist() for vector in dense_raw],
+            dense_raw,
             [
                 models.SparseVector(indices=vector.indices.tolist(), values=vector.values.tolist())
                 for vector in sparse_raw

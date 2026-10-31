@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from qdrant_client import AsyncQdrantClient, models
 
 from app.core.config import Settings
-from app.modules.documents.embeddings import dense_model, sparse_model
+from app.modules.documents.embeddings import embed_dense, sparse_model
 from app.modules.documents.indexer import DENSE_VECTOR, SPARSE_VECTOR
 from app.modules.knowledge_base.schemas import (
     KnowledgeBaseStats,
@@ -52,11 +52,7 @@ class KnowledgeBaseService:
         if not await self.qdrant.collection_exists(self.settings.qdrant_collection):
             return SearchResponse(results=[])
         dense, sparse = await asyncio.gather(
-            asyncio.to_thread(
-                lambda: next(
-                    iter(dense_model(self.settings.embedding_model).query_embed(request.query))
-                )
-            ),
+            embed_dense(self.settings, [request.query], query=True),
             asyncio.to_thread(
                 lambda: next(
                     iter(
@@ -72,7 +68,7 @@ class KnowledgeBaseService:
             collection_name=self.settings.qdrant_collection,
             prefetch=[
                 models.Prefetch(
-                    query=dense.tolist(),
+                    query=dense[0],
                     using=DENSE_VECTOR,
                     filter=tenant_filter,
                     limit=max(request.limit * 3, 20),

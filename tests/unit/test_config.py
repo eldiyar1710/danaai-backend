@@ -31,3 +31,11 @@ def test_default_llm_configuration_is_cost_controlled() -> None:
     assert settings.llm_fallback_model == "gpt-6.1-sol"
     assert settings.openai_reasoning_effort == "low"
     assert settings.openai_store_responses is False
+
+
+def test_default_embedding_configuration_uses_openai() -> None:
+    settings = Settings()
+    assert settings.embedding_provider == "openai"
+    assert settings.embedding_model == "text-embedding-3-large"
+    assert settings.embedding_dimension == 1024
+    assert settings.qdrant_collection == "semyzbay_documents_v2"

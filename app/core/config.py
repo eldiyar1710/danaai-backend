@@ -24,9 +24,11 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: SecretStr | None = None
-    qdrant_collection: str = "semyzbay_documents"
-    embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-    embedding_dimension: int = Field(default=384, ge=1)
+    qdrant_collection: str = "semyzbay_documents_v2"
+    embedding_provider: Literal["fastembed", "openai"] = "openai"
+    embedding_model: str = "text-embedding-3-large"
+    embedding_dimension: int = Field(default=1024, ge=1)
+    embedding_batch_size: int = Field(default=64, ge=1, le=2048)
     sparse_embedding_model: str = "Qdrant/bm25"
     document_chunk_size: int = Field(default=1200, ge=200)
     document_chunk_overlap: int = Field(default=200, ge=0)
