@@ -1,4 +1,4 @@
-.PHONY: install lint format test migrate up down logs
+.PHONY: install lint format test migrate seed-users up down logs
 
 install:
 	python3.12 -m venv .venv
@@ -17,6 +17,9 @@ test:
 
 migrate:
 	.venv/bin/alembic upgrade head
+
+seed-users:
+	docker compose exec semyzbay-api python scripts/seed_users.py
 
 up:
 	docker compose up -d --build

@@ -39,6 +39,7 @@ def test_default_embedding_configuration_uses_openai() -> None:
     assert settings.embedding_model == "text-embedding-3-large"
     assert settings.embedding_dimension == 1024
     assert settings.qdrant_collection == "semyzbay_documents_v2"
+    assert settings.fastembed_cache_path == ".cache/fastembed"
 
 
 def test_default_voice_agent_configuration_uses_elevenlabs_with_openai_fallback() -> None:

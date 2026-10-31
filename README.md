@@ -62,6 +62,18 @@ docker compose exec semyzbay-api python scripts/create_superadmin.py \
   --email admin@example.com --first-name System --last-name Admin
 ```
 
+For a local organization with one user per role, run the idempotent interactive seed:
+
+```bash
+make seed-users
+```
+
+It creates `Semyzbay Demo` plus `superadmin@semyzbay.kz`,
+`orgadmin@semyzbay.kz`, and `user@semyzbay.kz`. Passwords are entered without echo.
+Repeated runs preserve existing passwords; pass `--reset-passwords` directly to
+`scripts/seed_users.py` when an intentional reset is required. CI can provide passwords via
+`SEED_SUPER_ADMIN_PASSWORD`, `SEED_ORG_ADMIN_PASSWORD`, and `SEED_USER_PASSWORD`.
+
 Authentication and administration routes are exposed below `/api/v1`:
 
 - `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`
@@ -77,6 +89,9 @@ Authentication and administration routes are exposed below `/api/v1`:
 - `POST /chat/messages`, `POST /chat/messages/stream`
 - `POST /voice/ask` (multipart audio question to grounded text and voice response)
 - `GET /voice/messages/{message_id}/audio` (authenticated WAV playback)
+- `POST /speech/transcribe` (standalone authenticated speech-to-text)
+- `POST /speech/synthesize` (standalone authenticated MP3/WAV response)
+- `GET /speech/voices` (configured ElevenLabs voice and OpenAI fallback voices)
 - `POST /conversations`, `GET /conversations`
 - `GET /conversations/{conversation_id}/messages`
 
@@ -86,6 +101,10 @@ dimensions, local BM25 sparse embeddings, and deterministic lexical reranking. S
 Apache-2.0 multilingual `BAAI/bge-reranker-v2-m3-int8` cross-encoder. Its model artifact is
 about 570 MB, so production should pre-bake or persist the FastEmbed cache. The first use of
 each configured model downloads its artifacts.
+
+Docker Compose mounts the shared `fastembed_cache` named volume at
+`/app/.cache/fastembed` for both API and worker. Downloaded sparse/reranker model artifacts
+therefore survive container recreation and are reused by document indexing and retrieval.
 
 `POST /rag/retrieve` never accepts unapproved or inactive Qdrant points and uses the same
 tenant authorization as knowledge-base search. Retrieved text that resembles an instruction
@@ -104,6 +123,12 @@ When configured, it uses ElevenLabs `scribe_v2` for recorded speech and
 the primary provider fails. The JSON response identifies the actual provider, model, format,
 transcript, grounded answer, sources, and authenticated audio URL. Clients must disclose that
 the played voice is AI-generated; downloads return `X-AI-Generated-Voice: true`.
+
+The standalone speech endpoints use the same provider fallback policy. `POST
+/speech/transcribe` accepts multipart fields `file` and optional `language` (`kk`, `ru`, or
+`en`). `POST /speech/synthesize` accepts JSON with `text` plus optional `language`, `voice_id`,
+`speed`, and `output_format`. The audio response headers expose the provider, model, and actual
+voice used. All three endpoints require a bearer access token.
 
 The former public MinIO Community container registry stopped allowing anonymous pulls in
 2026. For reproducible local development, Compose builds the last pinned AGPL Community

@@ -39,18 +39,28 @@ class ElevenLabsAudioClient:
             raise AudioProviderError("ELEVENLABS_VOICE_ID is not configured")
         return value
 
-    async def transcribe(self, *, filename: str, content: bytes, content_type: str) -> str:
+    async def transcribe(
+        self,
+        *,
+        filename: str,
+        content: bytes,
+        content_type: str,
+        language: str | None = None,
+    ) -> str:
         url = f"{str(self.settings.elevenlabs_base_url).rstrip('/')}/speech-to-text"
+        data = {
+            "model_id": self.settings.elevenlabs_stt_model,
+            "tag_audio_events": "false",
+            "diarize": "false",
+        }
+        if language is not None:
+            data["language_code"] = {"kk": "kaz", "ru": "rus", "en": "eng"}.get(language, language)
         try:
             async with httpx.AsyncClient(timeout=self.settings.provider_timeout_seconds) as client:
                 response = await client.post(
                     url,
                     headers={"xi-api-key": self._api_key()},
-                    data={
-                        "model_id": self.settings.elevenlabs_stt_model,
-                        "tag_audio_events": "false",
-                        "diarize": "false",
-                    },
+                    data=data,
                     files={"file": (filename, content, content_type)},
                 )
         except httpx.HTTPError as exc:
@@ -66,25 +76,35 @@ class ElevenLabsAudioClient:
             raise AudioProviderError("ElevenLabs returned an empty transcription")
         return text
 
-    async def synthesize(self, text: str) -> bytes:
+    async def synthesize(
+        self,
+        text: str,
+        *,
+        voice_id: str | None = None,
+        output_format: str | None = None,
+    ) -> bytes:
         if not text.strip():
             raise AudioProviderError("Cannot synthesize empty text")
-        voice_id = self._voice_id()
+        selected_voice = (voice_id or self._voice_id()).strip()
         audio_chunks: list[bytes] = []
         try:
             async with connect(
-                self._dialogue_url(),
+                self._dialogue_url(output_format),
                 additional_headers={"xi-api-key": self._api_key()},
                 open_timeout=self.settings.provider_timeout_seconds,
                 close_timeout=10,
                 max_size=None,
             ) as websocket:
-                await websocket.send(json.dumps({"voices": [voice_id]}))
+                await websocket.send(json.dumps({"voices": [selected_voice]}))
                 await websocket.send(
                     json.dumps(
                         {
                             "inputs": [
-                                {"text": text, "voice_id": voice_id, "new_turn": True}
+                                {
+                                    "text": text,
+                                    "voice_id": selected_voice,
+                                    "new_turn": True,
+                                }
                             ]
                         }
                     )
@@ -107,7 +127,7 @@ class ElevenLabsAudioClient:
             raise AudioProviderError("ElevenLabs returned empty audio")
         return audio
 
-    def _dialogue_url(self) -> str:
+    def _dialogue_url(self, output_format: str | None = None) -> str:
         parsed = urlparse(str(self.settings.elevenlabs_base_url))
         scheme = "wss" if parsed.scheme == "https" else "ws"
         base_path = parsed.path.rstrip("/")
@@ -115,7 +135,7 @@ class ElevenLabsAudioClient:
         query = urlencode(
             {
                 "model_id": self.settings.elevenlabs_tts_model,
-                "output_format": self.settings.elevenlabs_output_format,
+                "output_format": output_format or self.settings.elevenlabs_output_format,
             }
         )
         return urlunparse((scheme, parsed.netloc, path, "", query, ""))

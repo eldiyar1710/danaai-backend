@@ -314,10 +314,13 @@ class DocumentService:
             else DocumentStatus.UPLOADED
         )
         await self.repository.session.commit()
+        await self.repository.session.refresh(document)
+        await self.repository.session.refresh(job)
+        response = DocumentStatusRead(document=document, latest_job=job)
         celery_app.send_task(
             "documents.process", args=[str(document.id), str(version.id), str(job.id)]
         )
-        return DocumentStatusRead(document=document, latest_job=job)
+        return response
 
     async def download(self, actor: User, document_id: UUID) -> tuple[Document, BaseHTTPResponse]:
         document = await self.get(actor, document_id)

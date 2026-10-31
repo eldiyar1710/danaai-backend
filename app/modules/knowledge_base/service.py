@@ -56,9 +56,10 @@ class KnowledgeBaseService:
             asyncio.to_thread(
                 lambda: next(
                     iter(
-                        sparse_model(self.settings.sparse_embedding_model).query_embed(
-                            request.query
-                        )
+                        sparse_model(
+                            self.settings.sparse_embedding_model,
+                            self.settings.fastembed_cache_path,
+                        ).query_embed(request.query)
                     )
                 )
             ),

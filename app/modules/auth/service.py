@@ -13,6 +13,7 @@ from app.core.security import (
     verify_password,
 )
 from app.modules.auth.models import RefreshSession
+from app.modules.auth.policy import user_has_active_tenant
 from app.modules.auth.repository import RefreshSessionRepository
 from app.modules.auth.schemas import TokenPair
 from app.modules.users.models import User
@@ -44,6 +45,8 @@ class AuthenticationService:
             or not verify_password(password, user.hashed_password)
         ):
             raise self.unauthorized()
+        if not await user_has_active_tenant(self.users.session, user):
+            raise self.unauthorized()
         if needs_password_rehash(user.hashed_password):
             user.hashed_password = hash_password(password)
         tokens = await self._issue_pair(user)
@@ -62,6 +65,8 @@ class AuthenticationService:
             raise self.unauthorized()
         user = await self.users.get_by_id(claims.sub)
         if user is None or not user.is_active:
+            raise self.unauthorized()
+        if not await user_has_active_tenant(self.users.session, user):
             raise self.unauthorized()
         await self.refresh_sessions.revoke(stored, datetime.now(UTC))
         tokens = await self._issue_pair(user)

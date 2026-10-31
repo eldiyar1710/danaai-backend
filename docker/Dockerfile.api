@@ -15,7 +15,8 @@ COPY alembic.ini ./
 COPY alembic ./alembic
 COPY app ./app
 COPY scripts ./scripts
-RUN chown -R semyzbay:semyzbay /app
+RUN mkdir -p /app/.cache/fastembed \
+    && chown -R semyzbay:semyzbay /app
 
 USER semyzbay
 EXPOSE 8000

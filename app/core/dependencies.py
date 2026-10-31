@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.core.security import TokenError, decode_token
+from app.modules.auth.policy import user_has_active_tenant
 from app.modules.users.models import User, UserRole
 from app.modules.users.repository import UserRepository
 
@@ -46,6 +47,8 @@ async def get_current_user(
     if user is None or not user.is_active:
         raise unauthorized
     if user.role != claims.role or user.organization_id != claims.organization_id:
+        raise unauthorized
+    if not await user_has_active_tenant(session, user):
         raise unauthorized
     return user
 

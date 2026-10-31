@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     embedding_dimension: int = Field(default=1024, ge=1)
     embedding_batch_size: int = Field(default=64, ge=1, le=2048)
     sparse_embedding_model: str = "Qdrant/bm25"
+    fastembed_cache_path: str = ".cache/fastembed"
     document_chunk_size: int = Field(default=1200, ge=200)
     document_chunk_overlap: int = Field(default=200, ge=0)
     llm_provider: Literal["openai"] = "openai"

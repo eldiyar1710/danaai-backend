@@ -24,7 +24,11 @@ class DocumentIndexer:
     ) -> None:
         self.settings = settings
         self.client = client
-        self._sparse = sparse_model(settings.sparse_embedding_model) if initialize_models else None
+        self._sparse = (
+            sparse_model(settings.sparse_embedding_model, settings.fastembed_cache_path)
+            if initialize_models
+            else None
+        )
 
     async def ensure_collection(self) -> None:
         if await self.client.collection_exists(self.settings.qdrant_collection):

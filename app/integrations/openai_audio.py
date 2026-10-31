@@ -28,8 +28,18 @@ class OpenAIAudioClient:
             raise AudioProviderError("OPENAI_API_KEY is not configured")
         return value
 
-    async def transcribe(self, *, filename: str, content: bytes, content_type: str) -> str:
+    async def transcribe(
+        self,
+        *,
+        filename: str,
+        content: bytes,
+        content_type: str,
+        language: str | None = None,
+    ) -> str:
         url = f"{str(self.settings.openai_base_url).rstrip('/')}/audio/transcriptions"
+        data = {"model": self.settings.stt_model, "response_format": "json"}
+        if language is not None:
+            data["language"] = language
         try:
             async with httpx.AsyncClient(timeout=self.settings.provider_timeout_seconds) as client:
                 response = await client.post(
@@ -38,7 +48,7 @@ class OpenAIAudioClient:
                         "Authorization": f"Bearer {self._api_key()}",
                         "X-Client-Request-Id": str(uuid4()),
                     },
-                    data={"model": self.settings.stt_model, "response_format": "json"},
+                    data=data,
                     files={"file": (filename, content, content_type)},
                 )
         except httpx.HTTPError as exc:
@@ -54,7 +64,9 @@ class OpenAIAudioClient:
             raise AudioProviderError("OpenAI returned an empty transcription")
         return text
 
-    async def synthesize(self, text: str) -> bytes:
+    async def synthesize(
+        self, text: str, *, voice: str | None = None, speed: float | None = None
+    ) -> bytes:
         if not text.strip():
             raise AudioProviderError("Cannot synthesize empty text")
         pcm_chunks: list[bytes] = []
@@ -82,8 +94,8 @@ class OpenAIAudioClient:
                                 "audio": {
                                     "output": {
                                         "format": {"type": "audio/pcm", "rate": 24000},
-                                        "voice": self.settings.tts_voice,
-                                        "speed": self.settings.tts_speed,
+                                        "voice": voice or self.settings.tts_voice,
+                                        "speed": speed or self.settings.tts_speed,
                                     }
                                 },
                             },

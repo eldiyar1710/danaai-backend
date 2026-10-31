@@ -50,9 +50,7 @@ class Message(UUIDPrimaryKeyMixin, Base):
     generation_status: Mapped[GenerationStatus] = mapped_column(
         Enum(GenerationStatus, name="generation_status")
     )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class MessageSource(UUIDPrimaryKeyMixin, Base):
@@ -63,13 +61,13 @@ class MessageSource(UUIDPrimaryKeyMixin, Base):
         PGUUID(as_uuid=True), ForeignKey("messages.id", ondelete="CASCADE")
     )
     document_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("documents.id", ondelete="RESTRICT")
+        PGUUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE")
     )
     document_version_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("document_versions.id", ondelete="RESTRICT")
+        PGUUID(as_uuid=True), ForeignKey("document_versions.id", ondelete="CASCADE")
     )
     chunk_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("document_chunks.id", ondelete="RESTRICT")
+        PGUUID(as_uuid=True), ForeignKey("document_chunks.id", ondelete="CASCADE")
     )
     relevance_score: Mapped[float] = mapped_column(Float)
     page_number: Mapped[int | None]

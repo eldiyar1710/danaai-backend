@@ -20,6 +20,12 @@ def test_elevenlabs_dialogue_url_uses_v4_turbo() -> None:
 
 
 def test_elevenlabs_requires_voice_id_only_for_tts() -> None:
-    client = ElevenLabsAudioClient(Settings(elevenlabs_api_key=SecretStr("test-key")))
+    client = ElevenLabsAudioClient(
+        Settings(
+            _env_file=None,
+            elevenlabs_api_key=SecretStr("test-key"),
+            elevenlabs_voice_id=None,
+        )
+    )
     assert client.configured_for_stt is True
     assert client.configured_for_tts is False

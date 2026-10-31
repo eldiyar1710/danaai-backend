@@ -26,6 +26,7 @@ x-app-environment: &app-environment
   EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-1024}
   EMBEDDING_BATCH_SIZE: ${EMBEDDING_BATCH_SIZE:-64}
   SPARSE_EMBEDDING_MODEL: ${SPARSE_EMBEDDING_MODEL:-Qdrant/bm25}
+  FASTEMBED_CACHE_PATH: /app/.cache/fastembed
   RAG_RETRIEVAL_LIMIT: ${RAG_RETRIEVAL_LIMIT:-30}
   RAG_RERANK_LIMIT: ${RAG_RERANK_LIMIT:-8}
   RAG_MIN_RELEVANCE_SCORE: ${RAG_MIN_RELEVANCE_SCORE:-0.05}
@@ -57,10 +58,21 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.api
-    environment: *app-environment
+    environment:
+      <<: *app-environment
+      SEED_ORGANIZATION_NAME: ${SEED_ORGANIZATION_NAME:-Semyzbay Demo}
+      SEED_ORGANIZATION_DESCRIPTION: ${SEED_ORGANIZATION_DESCRIPTION:-Local development organization}
+      SEED_SUPER_ADMIN_EMAIL: ${SEED_SUPER_ADMIN_EMAIL:-superadmin@semyzbay.kz}
+      SEED_SUPER_ADMIN_PASSWORD: ${SEED_SUPER_ADMIN_PASSWORD:-}
+      SEED_ORG_ADMIN_EMAIL: ${SEED_ORG_ADMIN_EMAIL:-orgadmin@semyzbay.kz}
+      SEED_ORG_ADMIN_PASSWORD: ${SEED_ORG_ADMIN_PASSWORD:-}
+      SEED_USER_EMAIL: ${SEED_USER_EMAIL:-user@semyzbay.kz}
+      SEED_USER_PASSWORD: ${SEED_USER_PASSWORD:-}
     command: ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000"]
     ports:
       - "${API_PORT:-8000}:8000"
+    volumes:
+      - fastembed_cache:/app/.cache/fastembed
     depends_on:
       semyzbay-postgres:
         condition: service_healthy
@@ -84,6 +96,8 @@ services:
       context: .
       dockerfile: docker/Dockerfile.worker
     environment: *app-environment
+    volumes:
+      - fastembed_cache:/app/.cache/fastembed
     depends_on:
       semyzbay-postgres:
         condition: service_healthy
@@ -166,3 +180,4 @@ volumes:
   redis_data:
   qdrant_data:
   minio_data:
+  fastembed_cache:

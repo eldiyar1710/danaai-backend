@@ -11,6 +11,7 @@ WORKDIR /app
 COPY requirements.lock ./
 RUN pip install --requirement requirements.lock
 COPY app ./app
-RUN chown -R semyzbay:semyzbay /app
+RUN mkdir -p /app/.cache/fastembed \
+    && chown -R semyzbay:semyzbay /app
 USER semyzbay
 CMD ["celery", "-A", "app.workers.celery_app:celery_app", "worker", "--loglevel=INFO"]
