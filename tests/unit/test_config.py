@@ -39,3 +39,10 @@ def test_default_embedding_configuration_uses_openai() -> None:
     assert settings.embedding_model == "text-embedding-3-large"
     assert settings.embedding_dimension == 1024
     assert settings.qdrant_collection == "semyzbay_documents_v2"
+
+
+def test_default_voice_agent_configuration_uses_current_openai_models() -> None:
+    settings = Settings()
+    assert settings.stt_model == "gpt-transcribe"
+    assert settings.tts_model == "gpt-realtime-2.1-mini"
+    assert settings.tts_voice == "marin"

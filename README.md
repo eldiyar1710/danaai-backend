@@ -27,9 +27,11 @@ organization, and user-management APIs.
 - Advanced RAG retrieval with query normalization, kk/ru/en language detection,
   configurable reranking, prompt-injection filtering, bounded deduplicated context, and
   deterministic source IDs for citation validation.
+- Grounded OpenAI Responses generation with citation validation and persisted conversations.
+- A voice-agent pipeline that transcribes uploaded audio, runs the same tenant-safe RAG chat,
+  synthesizes a WAV response, stores audio privately, and exposes authenticated playback.
 
-Grounded LLM generation, conversations, audit APIs, and speech are not complete yet; they
-follow the phase gates in [architecture](docs/architecture.md).
+Audit APIs remain a future phase described in [architecture](docs/architecture.md).
 
 ## Local Docker run
 
@@ -73,11 +75,14 @@ Authentication and administration routes are exposed below `/api/v1`:
 - `POST /knowledge-base/search`, `GET /knowledge-base/stats`
 - `POST /rag/retrieve` (safe retrieval package for the future chat/generation API)
 - `POST /chat/messages`, `POST /chat/messages/stream`
+- `POST /voice/ask` (multipart audio question to grounded text and voice response)
+- `GET /voice/messages/{message_id}/audio` (authenticated WAV playback)
 - `POST /conversations`, `GET /conversations`
 - `GET /conversations/{conversation_id}/messages`
 
-The development defaults use the lightweight FastEmbed multilingual MiniLM embedding model
-and deterministic lexical reranking. Set `RERANKER_PROVIDER=fastembed` to enable the
+The development defaults use OpenAI `text-embedding-3-large` dense embeddings at 1024
+dimensions, local BM25 sparse embeddings, and deterministic lexical reranking. Set
+`RERANKER_PROVIDER=fastembed` to enable the
 Apache-2.0 multilingual `BAAI/bge-reranker-v2-m3-int8` cross-encoder. Its model artifact is
 about 570 MB, so production should pre-bake or persist the FastEmbed cache. The first use of
 each configured model downloads its artifacts.
@@ -91,6 +96,12 @@ Grounded chat calls the OpenAI Responses API with `store=false`, refuses generat
 approved context is insufficient, validates every `[S#]` citation before returning an answer,
 and persists accepted sources alongside the assistant message. The SSE endpoint buffers until
 validation completes so ungrounded model output is never streamed to clients.
+
+`POST /voice/ask` accepts FLAC, MP3, MP4, MPEG, MPGA, M4A, OGG, WAV, or WEBM up to 25 MB.
+It uses `gpt-transcribe` for recorded speech and `gpt-realtime-2.1-mini` with the `marin`
+voice for audio output. The JSON response includes the transcript, grounded answer, sources,
+and an authenticated relative audio URL. Clients must disclose that the played voice is
+AI-generated; the audio download also returns `X-AI-Generated-Voice: true`.
 
 The former public MinIO Community container registry stopped allowing anonymous pulls in
 2026. For reproducible local development, Compose builds the last pinned AGPL Community

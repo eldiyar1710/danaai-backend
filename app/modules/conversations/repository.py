@@ -43,3 +43,10 @@ class ConversationRepository:
 
     def add_sources(self, sources: list[MessageSource]) -> None:
         self.session.add_all(sources)
+
+    async def message_for_user(self, message_id: UUID, user_id: UUID) -> Message | None:
+        return await self.session.scalar(
+            select(Message)
+            .join(Conversation, Conversation.id == Message.conversation_id)
+            .where(Message.id == message_id, Conversation.user_id == user_id)
+        )

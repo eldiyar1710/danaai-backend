@@ -110,7 +110,9 @@ class ConversationService:
             "approved sources contain insufficient information. Do not provide hidden reasoning."
         )
 
-    async def send(self, actor: User, data: ChatRequest) -> ChatResponse:
+    async def send(
+        self, actor: User, data: ChatRequest, *, user_audio_path: str | None = None
+    ) -> ChatResponse:
         retrieval = await self.rag.retrieve(
             actor,
             RAGRetrieveRequest(
@@ -127,7 +129,7 @@ class ConversationService:
                 role=MessageRole.USER,
                 content=retrieval.normalized_query,
                 language=language,
-                audio_path=None,
+                audio_path=user_audio_path,
                 generation_status=GenerationStatus.ANSWERED,
             )
         )
@@ -207,6 +209,19 @@ class ConversationService:
             sources=retrieval.sources if generation_status == GenerationStatus.ANSWERED else [],
             citation_validation=validation,
         )
+
+    async def attach_audio(self, actor: User, message_id: UUID, audio_path: str) -> None:
+        message = await self.repository.message_for_user(message_id, actor.id)
+        if message is None:
+            raise HTTPException(status_code=404, detail="Message not found")
+        message.audio_path = audio_path
+        await self.session.commit()
+
+    async def audio_message(self, actor: User, message_id: UUID) -> Message:
+        message = await self.repository.message_for_user(message_id, actor.id)
+        if message is None:
+            raise HTTPException(status_code=404, detail="Message not found")
+        return message
 
     async def _save_failed_message(self, conversation_id: UUID, language: str) -> None:
         await self.repository.add_message(

@@ -22,6 +22,7 @@ from app.modules.knowledge_base.router import router as knowledge_base_router
 from app.modules.organizations.router import router as organizations_router
 from app.modules.rag.router import router as rag_router
 from app.modules.users.router import router as users_router
+from app.modules.voice.router import router as voice_router
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -64,6 +65,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(organizations_router, prefix=app_settings.api_v1_prefix)
     application.include_router(rag_router, prefix=app_settings.api_v1_prefix)
     application.include_router(users_router, prefix=app_settings.api_v1_prefix)
+    application.include_router(voice_router, prefix=app_settings.api_v1_prefix)
 
     @application.get("/health", tags=["health"], summary="Process liveness")
     async def health() -> dict[str, str]:

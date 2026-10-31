@@ -51,6 +51,15 @@ class Settings(BaseSettings):
     rag_neighbor_window: int = Field(default=1, ge=0, le=3)
     rag_allow_suspicious_context: bool = False
 
+    stt_provider: Literal["openai"] = "openai"
+    stt_model: str = "gpt-transcribe"
+    tts_provider: Literal["openai_realtime"] = "openai_realtime"
+    tts_model: str = "gpt-realtime-2.1-mini"
+    tts_voice: Literal[
+        "alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse", "marin", "cedar"
+    ] = "marin"
+    tts_speed: float = Field(default=1.0, ge=0.25, le=1.5)
+
     minio_endpoint: str = "localhost:9000"
     minio_access_key: SecretStr = SecretStr("change_me")
     minio_secret_key: SecretStr = SecretStr("change_me")
@@ -65,6 +74,7 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = Field(default=30, ge=1)
 
     max_upload_size_bytes: int = Field(default=50 * 1024 * 1024, ge=1)
+    max_audio_upload_size_bytes: int = Field(default=25 * 1024 * 1024, ge=1)
     max_audio_duration_seconds: int = Field(default=300, ge=1)
     provider_timeout_seconds: float = Field(default=30, gt=0)
     storage_retention_days: int = Field(default=365, ge=1)
