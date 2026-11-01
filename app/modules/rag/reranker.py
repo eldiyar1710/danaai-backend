@@ -7,6 +7,7 @@ from functools import lru_cache
 from typing import Protocol
 
 from app.core.config import Settings
+from app.modules.documents.embeddings import embed_dense
 from app.modules.knowledge_base.schemas import SearchHit
 
 _TOKEN = re.compile(r"[^\W_]+", re.UNICODE)
@@ -39,6 +40,37 @@ class LexicalReranker:
             )
             retrieval = max(0.0, min(float(hit.score), 1.0))
             ranked.append(RankedHit(hit=hit, score=(0.65 * retrieval) + (0.35 * overlap)))
+        return sorted(ranked, key=lambda item: item.score, reverse=True)
+
+
+def _cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
+    dot = sum(a * b for a, b in zip(left, right, strict=True))
+    left_norm = math.sqrt(sum(value * value for value in left))
+    right_norm = math.sqrt(sum(value * value for value in right))
+    if left_norm == 0.0 or right_norm == 0.0:
+        return 0.0
+    return max(0.0, min(dot / (left_norm * right_norm), 1.0))
+
+
+class EmbeddingReranker:
+    """Multilingual semantic reranking without a local cross-encoder."""
+
+    def __init__(self, settings: Settings) -> None:
+        self.settings = settings
+
+    async def rerank(self, query: str, hits: Sequence[SearchHit]) -> list[RankedHit]:
+        if not hits:
+            return []
+        query_vectors, document_vectors = await asyncio.gather(
+            embed_dense(self.settings, [query], query=True),
+            embed_dense(self.settings, [hit.text for hit in hits], query=False),
+        )
+        query_vector = query_vectors[0]
+        ranked = []
+        for hit, document_vector in zip(hits, document_vectors, strict=True):
+            semantic = _cosine_similarity(query_vector, document_vector)
+            retrieval = max(0.0, min(float(hit.score), 1.0))
+            ranked.append(RankedHit(hit=hit, score=(0.2 * retrieval) + (0.8 * semantic)))
         return sorted(ranked, key=lambda item: item.score, reverse=True)
 
 
@@ -77,4 +109,6 @@ class FastEmbedReranker:
 def create_reranker(settings: Settings) -> RerankerProvider:
     if settings.reranker_provider == "fastembed":
         return FastEmbedReranker(settings.reranker_model)
+    if settings.reranker_provider == "embedding":
+        return EmbeddingReranker(settings)
     return LexicalReranker()

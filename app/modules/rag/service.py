@@ -1,10 +1,14 @@
+import asyncio
+from uuid import UUID
+
 from fastapi import HTTPException, status
 
 from app.core.config import Settings
-from app.modules.knowledge_base.schemas import SearchRequest
+from app.modules.knowledge_base.schemas import SearchHit, SearchRequest
 from app.modules.knowledge_base.service import KnowledgeBaseService
 from app.modules.rag.context import build_context
 from app.modules.rag.language import Language, detect_language, normalize_query
+from app.modules.rag.query_expansion import QueryExpander
 from app.modules.rag.reranker import RankedHit, RerankerProvider
 from app.modules.rag.schemas import RAGRetrieveRequest, RAGRetrieveResponse
 from app.modules.rag.security import scan_prompt_injection
@@ -21,6 +25,7 @@ class RAGService:
         self.settings = settings
         self.knowledge_base = knowledge_base
         self.reranker = reranker
+        self.query_expander = QueryExpander(settings)
 
     async def _expand_neighbors(
         self,
@@ -86,18 +91,34 @@ class RAGService:
             )
         detected = detect_language(query, self.settings.default_language)
         response_language: Language = request.response_language or detected
-        search = await self.knowledge_base.search(
-            actor,
-            SearchRequest(
-                query=query,
-                organization_id=request.organization_id,
-                limit=self.settings.rag_retrieval_limit,
-            ),
+        expansion = await self.query_expander.expand(query, detected)
+        searches = await asyncio.gather(
+            *(
+                self.knowledge_base.search(
+                    actor,
+                    SearchRequest(
+                        query=retrieval_query,
+                        organization_id=request.organization_id,
+                        limit=self.settings.rag_retrieval_limit,
+                    ),
+                )
+                for retrieval_query in expansion.queries
+            )
         )
+
+        merged_hits: dict[UUID, SearchHit] = {}
+        for search in searches:
+            for hit in search.results:
+                existing = merged_hits.get(hit.chunk_id)
+                if existing is None or hit.score > existing.score:
+                    merged_hits[hit.chunk_id] = hit
+        search_hits = sorted(
+            merged_hits.values(), key=lambda item: item.score, reverse=True
+        )[: self.settings.rag_retrieval_limit]
 
         clean_hits = []
         excluded = 0
-        for hit in search.results:
+        for hit in search_hits:
             scan = scan_prompt_injection(hit.text)
             if scan.suspicious and not self.settings.rag_allow_suspicious_context:
                 excluded += 1
@@ -113,7 +134,7 @@ class RAGService:
             max_chars=self.settings.rag_max_context_chars,
             min_score=self.settings.rag_min_relevance_score,
         )
-        warnings = []
+        warnings = [expansion.warning] if expansion.warning else []
         if excluded:
             warnings.append("Suspicious retrieved content was excluded from the model context")
         if not sources:

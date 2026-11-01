@@ -1,10 +1,16 @@
 from uuid import uuid4
 
+from app.core.config import Settings
 from app.modules.knowledge_base.schemas import SearchHit
 from app.modules.rag.citations import validate_citations
 from app.modules.rag.context import build_context
 from app.modules.rag.language import detect_language, normalize_query
-from app.modules.rag.reranker import LexicalReranker, RankedHit
+from app.modules.rag.reranker import (
+    EmbeddingReranker,
+    LexicalReranker,
+    RankedHit,
+    _cosine_similarity,
+)
 from app.modules.rag.schemas import RAGSource
 from app.modules.rag.security import scan_prompt_injection
 
@@ -53,6 +59,31 @@ async def test_lexical_reranker_prioritizes_query_coverage() -> None:
         [hit("unrelated paragraph", 0.5), hit("fire safety procedure", 0.5)],
     )
     assert results[0].hit.text == "fire safety procedure"
+    assert results[0].score > results[1].score
+
+
+def test_cosine_similarity_is_bounded_and_handles_zero_vectors() -> None:
+    assert _cosine_similarity([1.0, 0.0], [1.0, 0.0]) == 1.0
+    assert _cosine_similarity([1.0, 0.0], [-1.0, 0.0]) == 0.0
+    assert _cosine_similarity([0.0, 0.0], [1.0, 0.0]) == 0.0
+
+
+async def test_embedding_reranker_prioritizes_cross_language_semantics(monkeypatch) -> None:
+    async def fake_embed_dense(settings, texts, *, query):
+        if query:
+            return [[1.0, 0.0]]
+        return [[0.0, 1.0], [0.95, 0.05]]
+
+    monkeypatch.setattr("app.modules.rag.reranker.embed_dense", fake_embed_dense)
+    reranker = EmbeddingReranker(Settings())
+    results = await reranker.rerank(
+        "Жазатайым оқиға туралы кімге хабарлау қажет?",
+        [
+            hit("Посторонний текст", 0.7),
+            hit("При несчастном случае сообщите руководителю", 0.6),
+        ],
+    )
+    assert results[0].hit.text == "При несчастном случае сообщите руководителю"
     assert results[0].score > results[1].score
 
 

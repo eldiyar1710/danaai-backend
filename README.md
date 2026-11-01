@@ -27,8 +27,9 @@ Frontend integration guide: [docs/frontend-api-guide.md](docs/frontend-api-guide
   dense embeddings, BM25 sparse embeddings, named Qdrant vectors and payload indexes.
 - Tenant-filtered approved/active hybrid search using Qdrant RRF fusion.
 - Advanced RAG retrieval with query normalization, kk/ru/en language detection,
-  configurable reranking, prompt-injection filtering, bounded deduplicated context, and
-  deterministic source IDs for citation validation.
+  Kazakh-to-Russian dual-query expansion, configurable multilingual reranking,
+  prompt-injection filtering, bounded deduplicated context, and deterministic source IDs
+  for citation validation.
 - Grounded OpenAI Responses generation with citation validation and persisted conversations.
 - A voice-agent pipeline that transcribes uploaded audio, runs the same tenant-safe RAG chat,
   synthesizes a WAV response, stores audio privately, and exposes authenticated playback.
@@ -98,7 +99,9 @@ Authentication and administration routes are exposed below `/api/v1`:
 - `GET /conversations/{conversation_id}/messages`
 
 The development defaults use OpenAI `text-embedding-3-large` dense embeddings at 1024
-dimensions, local BM25 sparse embeddings, and deterministic lexical reranking. Set
+dimensions, local BM25 sparse embeddings, and deterministic lexical reranking. Production
+can set `RERANKER_PROVIDER=embedding` to semantically rerank multilingual results through the
+configured embedding provider without loading another model on the server. Set
 `RERANKER_PROVIDER=fastembed` to enable the
 Apache-2.0 multilingual `BAAI/bge-reranker-v2-m3-int8` cross-encoder. Its model artifact is
 about 570 MB, so production should pre-bake or persist the FastEmbed cache. The first use of
