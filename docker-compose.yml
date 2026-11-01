@@ -4,6 +4,11 @@ x-app-environment: &app-environment
   APP_ENV: ${APP_ENV:-development}
   DEBUG: ${DEBUG:-false}
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  API_V1_PREFIX: ${API_V1_PREFIX:-/api/v1}
+  PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8000}
+  CORS_ORIGINS: '${CORS_ORIGINS:-["http://localhost:3000"]}'
+  DATABASE_POOL_SIZE: ${DATABASE_POOL_SIZE:-5}
+  DATABASE_MAX_OVERFLOW: ${DATABASE_MAX_OVERFLOW:-5}
   DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-semyzbay}:${POSTGRES_PASSWORD:-change_me}@semyzbay-postgres:5432/${POSTGRES_DB:-semyzbay_db}
   REDIS_URL: redis://semyzbay-redis:6379/0
   QDRANT_URL: http://semyzbay-qdrant:6333
@@ -70,7 +75,7 @@ services:
       SEED_USER_PASSWORD: ${SEED_USER_PASSWORD:-}
     command: ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000"]
     ports:
-      - "${API_PORT:-8000}:8000"
+      - "127.0.0.1:${API_PORT:-8000}:8000"
     volumes:
       - fastembed_cache:/app/.cache/fastembed
     depends_on:
@@ -95,6 +100,15 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.worker
+    command:
+      [
+        "celery",
+        "-A",
+        "app.workers.celery_app:celery_app",
+        "worker",
+        "--loglevel=INFO",
+        "--concurrency=${CELERY_WORKER_CONCURRENCY:-1}",
+      ]
     environment: *app-environment
     volumes:
       - fastembed_cache:/app/.cache/fastembed

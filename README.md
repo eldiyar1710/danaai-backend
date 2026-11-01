@@ -4,6 +4,8 @@ Production-oriented modular FastAPI backend for the Semyzbay occupational-safety
 The repository currently contains the infrastructure foundation and the authentication,
 organization, and user-management APIs.
 
+Frontend integration guide: [docs/frontend-api-guide.md](docs/frontend-api-guide.md).
+
 ## What is implemented
 
 - FastAPI application with OpenAPI, request IDs, JSON logging, CORS, liveness and readiness.
