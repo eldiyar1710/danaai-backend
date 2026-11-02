@@ -324,6 +324,12 @@ class DocumentService:
 
     async def download(self, actor: User, document_id: UUID) -> tuple[Document, BaseHTTPResponse]:
         document = await self.get(actor, document_id)
+        if actor.role == UserRole.USER and (
+            document.status != DocumentStatus.READY
+            or document.approval_status != ApprovalStatus.APPROVED
+            or document.active_version_id is None
+        ):
+            raise HTTPException(status_code=404, detail="Document not found")
         response = await asyncio.to_thread(
             self.storage.get_object,
             self.settings.minio_documents_bucket,

@@ -1,5 +1,7 @@
 from collections.abc import Iterator
+from pathlib import Path
 from typing import cast
+from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, status
@@ -8,7 +10,12 @@ from minio import Minio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
-from app.core.dependencies import get_app_settings, get_db_session, require_roles
+from app.core.dependencies import (
+    get_app_settings,
+    get_current_user,
+    get_db_session,
+    require_roles,
+)
 from app.modules.documents.models import Document, DocumentVersion
 from app.modules.documents.repository import DocumentRepository
 from app.modules.documents.schemas import (
@@ -102,7 +109,7 @@ async def get_status(
 @router.get("/{document_id}/download", response_class=StreamingResponse)
 async def download_document(
     document_id: UUID,
-    actor: User = Depends(admin),
+    actor: User = Depends(get_current_user),
     document_service: DocumentService = Depends(service),
 ) -> StreamingResponse:
     document, response = await document_service.download(actor, document_id)
@@ -117,7 +124,12 @@ async def download_document(
     return StreamingResponse(
         body(),
         media_type=document.mime_type,
-        headers={"Content-Disposition": f'attachment; filename="{document.original_filename}"'},
+        headers={
+            "Content-Disposition": (
+                f'inline; filename="document{Path(document.original_filename).suffix.lower()}"; '
+                f"filename*=UTF-8''{quote(document.original_filename)}"
+            )
+        },
     )
 
 

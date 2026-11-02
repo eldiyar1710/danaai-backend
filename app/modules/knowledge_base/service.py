@@ -105,6 +105,7 @@ class KnowledgeBaseService:
                     page_number=payload.get("page_number"),
                     section_title=payload.get("section_title"),
                     section_number=payload.get("section_number"),
+                    document_title=payload.get("document_title"),
                 )
             )
         return SearchResponse(results=results)
@@ -155,6 +156,7 @@ class KnowledgeBaseService:
                 page_number=payload.get("page_number"),
                 section_title=payload.get("section_title"),
                 section_number=payload.get("section_number"),
+                document_title=payload.get("document_title"),
             )
         return chunks
 

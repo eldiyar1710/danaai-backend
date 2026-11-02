@@ -15,6 +15,11 @@ from app.modules.rag.security import scan_prompt_injection
 from app.modules.users.models import User
 
 
+def document_url(settings: Settings, document_id: UUID) -> str:
+    public_base_url = str(settings.public_base_url).rstrip("/")
+    return f"{public_base_url}{settings.api_v1_prefix}/documents/{document_id}/download"
+
+
 class RAGService:
     def __init__(
         self,
@@ -33,9 +38,9 @@ class RAGService:
         request: RAGRetrieveRequest,
         ranked: list[RankedHit],
     ) -> tuple[list[RankedHit], int]:
-        eligible = [
-            item for item in ranked if item.score >= self.settings.rag_min_relevance_score
-        ][: self.settings.rag_seed_limit]
+        eligible = [item for item in ranked if item.score >= self.settings.rag_min_relevance_score][
+            : self.settings.rag_seed_limit
+        ]
         window = self.settings.rag_neighbor_window
         if not eligible or window == 0:
             return eligible, 0
@@ -45,9 +50,7 @@ class RAGService:
             for offset in range(-window, window + 1)
             if item.hit.chunk_index is not None and item.hit.chunk_index + offset >= 0
         }
-        fetched = await self.knowledge_base.fetch_chunks(
-            actor, request.organization_id, references
-        )
+        fetched = await self.knowledge_base.fetch_chunks(actor, request.organization_id, references)
         expanded: list[RankedHit] = []
         seen: set[tuple[object, int]] = set()
         excluded = 0
@@ -112,9 +115,9 @@ class RAGService:
                 existing = merged_hits.get(hit.chunk_id)
                 if existing is None or hit.score > existing.score:
                     merged_hits[hit.chunk_id] = hit
-        search_hits = sorted(
-            merged_hits.values(), key=lambda item: item.score, reverse=True
-        )[: self.settings.rag_retrieval_limit]
+        search_hits = sorted(merged_hits.values(), key=lambda item: item.score, reverse=True)[
+            : self.settings.rag_retrieval_limit
+        ]
 
         clean_hits = []
         excluded = 0
@@ -134,6 +137,12 @@ class RAGService:
             max_chars=self.settings.rag_max_context_chars,
             min_score=self.settings.rag_min_relevance_score,
         )
+        sources = [
+            source.model_copy(
+                update={"document_url": document_url(self.settings, source.document_id)}
+            )
+            for source in sources
+        ]
         warnings = [expansion.warning] if expansion.warning else []
         if excluded:
             warnings.append("Suspicious retrieved content was excluded from the model context")

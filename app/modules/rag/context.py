@@ -50,6 +50,7 @@ def build_context(
                 rerank_score=ranked.score,
                 page_number=ranked.hit.page_number,
                 section_title=ranked.hit.section_title,
+                document_title=ranked.hit.document_title,
             )
         )
         seen.add(key)

@@ -13,6 +13,7 @@ from app.modules.rag.reranker import (
 )
 from app.modules.rag.schemas import RAGSource
 from app.modules.rag.security import scan_prompt_injection
+from app.modules.rag.service import document_url
 
 
 def hit(text: str, score: float = 0.5) -> SearchHit:
@@ -23,6 +24,7 @@ def hit(text: str, score: float = 0.5) -> SearchHit:
         chunk_index=0,
         text=text,
         score=score,
+        document_title="Safety manual",
     )
 
 
@@ -99,6 +101,18 @@ def test_context_is_deduplicated_bounded_and_cited() -> None:
     assert len(context) <= 100
     assert len(sources) == 1
     assert context.startswith("[S1]")
+    assert sources[0].document_title == "Safety manual"
+
+
+def test_rag_sources_include_protected_document_urls() -> None:
+    document_id = uuid4()
+    settings = Settings(
+        public_base_url="https://api.example.com",
+        api_v1_prefix="/api/v1",
+    )
+    assert document_url(settings, document_id) == (
+        f"https://api.example.com/api/v1/documents/{document_id}/download"
+    )
 
 
 def test_citation_validation_rejects_missing_and_unknown_sources() -> None:

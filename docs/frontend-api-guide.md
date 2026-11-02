@@ -357,6 +357,8 @@ type RagSource = {
   rerank_score: number;
   page_number: number | null;
   section_title: string | null;
+  document_title: string | null;
+  document_url: string | null;
 };
 ```
 
@@ -365,7 +367,26 @@ type RagSource = {
 - в тексте ответа оставить маркеры `[S1]`, `[S2]`;
 - сделать маркер кликабельным;
 - по клику открыть карточку источника с `text`, `page_number`, `section_title`;
-- для администратора можно добавить переход к документу по `document_id`.
+- показывать `document_title` и кнопку «Открыть документ» по `document_url`.
+
+`document_url` защищён bearer-токеном, поэтому обычный `<a href>` не передаст авторизацию.
+Получите документ через `fetch`, создайте Blob URL и откройте его в новой вкладке:
+
+```ts
+async function openRagDocument(documentUrl: string, accessToken: string): Promise<void> {
+  const response = await fetch(documentUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) throw await apiError(response);
+
+  const blobUrl = URL.createObjectURL(await response.blob());
+  window.open(blobUrl, "_blank", "noopener,noreferrer");
+  window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+}
+```
+
+Обычный `user` может скачать только утверждённый активный документ своей организации.
+Неутверждённые, архивные документы и документы другого tenant возвращают `404`.
 
 ## 7. Отдельные speech-функции
 

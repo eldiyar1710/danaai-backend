@@ -19,6 +19,7 @@ class SearchHit(BaseModel):
     page_number: int | None = None
     section_title: str | None = None
     section_number: str | None = None
+    document_title: str | None = None
 
 
 class SearchResponse(BaseModel):

@@ -20,6 +20,8 @@ class RAGSource(BaseModel):
     rerank_score: float
     page_number: int | None = None
     section_title: str | None = None
+    document_title: str | None = None
+    document_url: str | None = None
 
 
 class RAGRetrieveResponse(BaseModel):
