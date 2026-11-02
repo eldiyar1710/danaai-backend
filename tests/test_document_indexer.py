@@ -44,6 +44,9 @@ async def test_replace_and_activate_version_in_qdrant() -> None:
         TextChunk(0, "Lock equipment.", 1, "Isolation", None),
         TextChunk(1, "Check guards.", 2, "Restart", None),
     ]
+    assert DocumentIndexer.embedding_text(document.title, chunks[0]) == (
+        "Safety\nIsolation\nLock equipment."
+    )
     try:
         point_ids = await FakeIndexer(settings, client, initialize_models=False).replace_version(
             document, version_id, chunks

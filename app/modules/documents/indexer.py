@@ -74,7 +74,7 @@ class DocumentIndexer:
         active: bool = False,
     ) -> list[UUID]:
         await self.ensure_collection()
-        texts = [chunk.text for chunk in chunks]
+        texts = [self.embedding_text(document.title, chunk) for chunk in chunks]
         dense, sparse = await self.embed(texts)
         if len(dense) != len(chunks) or len(sparse) != len(chunks):
             raise RuntimeError("Embedding provider returned an unexpected vector count")
@@ -95,6 +95,7 @@ class DocumentIndexer:
                     "approval_status": "approved" if active else "pending",
                     "is_active": "true" if active else "false",
                     "language": document.language,
+                    "document_title": document.title,
                     "page_number": chunks[index].page_number,
                     "section_title": chunks[index].section_title,
                     "section_number": chunks[index].section_number,
@@ -122,6 +123,14 @@ class DocumentIndexer:
             wait=True,
         )
         return point_ids
+
+    @staticmethod
+    def embedding_text(document_title: str, chunk: TextChunk) -> str:
+        parts = [document_title]
+        if chunk.section_title and chunk.section_title != document_title:
+            parts.append(chunk.section_title)
+        parts.append(chunk.text)
+        return "\n".join(parts)
 
     async def embed(self, texts: list[str]) -> tuple[list[list[float]], list[models.SparseVector]]:
         if self._sparse is None:
