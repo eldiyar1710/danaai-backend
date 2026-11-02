@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from pydantic import BaseModel
 
 from app.modules.conversations.schemas import ChatResponse
@@ -14,4 +16,12 @@ class VoiceAudioResponse(BaseModel):
 
 class VoiceChatResponse(ChatResponse):
     transcript: str
+    spoken_text: str
     audio: VoiceAudioResponse
+
+
+class VoiceAudioMetadataResponse(BaseModel):
+    message_id: UUID
+    spoken_text: str
+    audio_url: str
+    content_type: str

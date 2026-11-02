@@ -91,7 +91,8 @@ Authentication and administration routes are exposed below `/api/v1`:
 - `POST /rag/retrieve` (safe retrieval package for the future chat/generation API)
 - `POST /chat/messages`, `POST /chat/messages/stream`
 - `POST /voice/ask` (multipart audio question to grounded text and voice response)
-- `GET /voice/messages/{message_id}/audio` (authenticated WAV playback)
+- `GET /voice/messages/{message_id}/audio` (authenticated audio playback; add
+  `?metadata=true` for the exact spoken text as JSON)
 - `POST /speech/transcribe` (standalone authenticated speech-to-text)
 - `POST /speech/synthesize` (standalone authenticated MP3/WAV response)
 - `GET /speech/voices` (configured ElevenLabs voice and OpenAI fallback voices)
@@ -126,7 +127,8 @@ When configured, it uses ElevenLabs `scribe_v2` for recorded speech and
 `eleven_v4_turbo` for Kazakh/Russian voice output. OpenAI `gpt-transcribe` and
 `gpt-realtime-2.1-mini` remain automatic fallbacks when ElevenLabs credentials are absent or
 the primary provider fails. The JSON response identifies the actual provider, model, format,
-transcript, grounded answer, sources, and authenticated audio URL. Clients must disclose that
+transcript, grounded answer, exact `spoken_text`, sources, and authenticated audio URL. Clients
+must disclose that
 the played voice is AI-generated; downloads return `X-AI-Generated-Voice: true`.
 
 The standalone speech endpoints use the same provider fallback policy. `POST

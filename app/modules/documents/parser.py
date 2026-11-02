@@ -43,7 +43,8 @@ def _parse_docx(content: bytes) -> list[ParsedBlock]:
         text = paragraph.text.strip()
         if not text:
             continue
-        if paragraph.style and paragraph.style.name.lower().startswith("heading"):
+        style_name = paragraph.style.name if paragraph.style else None
+        if style_name and style_name.lower().startswith("heading"):
             section = text
             continue
         blocks.append(ParsedBlock(text=text, section_title=section))

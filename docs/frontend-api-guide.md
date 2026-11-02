@@ -170,6 +170,7 @@ type VoiceAnswer = {
   message_id: string;
   transcript: string;
   answer: string;
+  spoken_text: string;
   language: "kk" | "ru" | "en";
   generation_status: "answered" | "insufficient_context" | "failed";
   model: string | null;
@@ -219,6 +220,7 @@ async function askByVoice(audio: Blob, accessToken: string): Promise<VoiceAnswer
   "message_id": "uuid",
   "transcript": "Өрт болған жағдайда не істеу керек?",
   "answer": "... [S1]",
+  "spoken_text": "...",
   "language": "kk",
   "generation_status": "answered",
   "model": "gpt-6-luna",
@@ -244,6 +246,29 @@ async function askByVoice(audio: Blob, accessToken: string): Promise<VoiceAnswer
   }
 }
 ```
+
+`spoken_text` — точный текст, который backend передал в синтез речи. В отличие от `answer`,
+он не содержит Markdown и ссылок вида `[S1]`, которые не должны произноситься голосом.
+
+Если нужно повторно получить текст для уже созданного аудио, используйте тот же маршрут с
+параметром `metadata=true`:
+
+```http
+GET /api/v1/voice/messages/{message_id}/audio?metadata=true
+```
+
+Он возвращает JSON без скачивания MP3:
+
+```json
+{
+  "message_id": "uuid",
+  "spoken_text": "Точный текст, воспроизводимый голосом",
+  "audio_url": "/api/v1/voice/messages/uuid/audio",
+  "content_type": "audio/mpeg"
+}
+```
+
+Без `metadata=true` маршрут возвращает бинарный MP3/WAV для воспроизведения.
 
 `audio.url` защищён bearer-токеном, поэтому его нельзя надёжно поставить напрямую в
 `<audio src>`. Нужно получить файл через `fetch`, создать Blob URL и освободить его после

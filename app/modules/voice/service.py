@@ -11,7 +11,7 @@ from minio import Minio
 from app.core.config import Settings
 from app.integrations.openai_audio import AudioProviderError
 from app.integrations.voice_audio import VoiceAudioClient
-from app.modules.conversations.models import MessageRole
+from app.modules.conversations.models import Message, MessageRole
 from app.modules.conversations.schemas import ChatRequest
 from app.modules.conversations.service import ConversationService
 from app.modules.users.models import User
@@ -56,9 +56,7 @@ class VoiceService:
                 detail="Speech transcription provider failed",
             ) from exc
         tenant_id = self.conversations.rag.knowledge_base.tenant(actor, organization_id)
-        input_path = (
-            f"{tenant_id}/{actor.id}/{uuid4()}/question{Path(filename).suffix.lower()}"
-        )
+        input_path = f"{tenant_id}/{actor.id}/{uuid4()}/question{Path(filename).suffix.lower()}"
         await self._put(input_path, content, content_type)
         chat = await self.conversations.send(
             actor,
@@ -87,6 +85,7 @@ class VoiceService:
         return VoiceChatResponse(
             **chat.model_dump(),
             transcript=transcript,
+            spoken_text=spoken_answer,
             audio=VoiceAudioResponse(
                 url=f"{self.settings.api_v1_prefix}/voice/messages/{chat.message_id}/audio",
                 content_type=output.content_type,
@@ -97,13 +96,8 @@ class VoiceService:
         )
 
     async def audio_response(self, actor: User, message_id: UUID) -> tuple[bytes, str]:
-        message = await self.conversations.audio_message(actor, message_id)
-        if (
-            message.role != MessageRole.ASSISTANT
-            or not message.audio_path
-            or not Path(message.audio_path).name.startswith("answer.")
-        ):
-            raise HTTPException(status_code=404, detail="Audio response not found")
+        message = await self._audio_message(actor, message_id)
+        assert message.audio_path is not None
         try:
             response = await asyncio.to_thread(
                 self.storage.get_object, self.settings.minio_audio_bucket, message.audio_path
@@ -115,8 +109,29 @@ class VoiceService:
                 response.release_conn()
         except Exception as exc:
             raise HTTPException(status_code=502, detail="Audio storage request failed") from exc
-        content_type = "audio/mpeg" if message.audio_path.endswith(".mp3") else "audio/wav"
-        return content, content_type
+        return content, self._audio_content_type(message)
+
+    async def audio_metadata(self, actor: User, message_id: UUID) -> tuple[str, str]:
+        message = await self._audio_message(actor, message_id)
+        return self._spoken_text(message.content), self._audio_content_type(message)
+
+    async def _audio_message(self, actor: User, message_id: UUID) -> Message:
+        message = await self.conversations.audio_message(actor, message_id)
+        if (
+            message.role != MessageRole.ASSISTANT
+            or not message.audio_path
+            or not Path(message.audio_path).name.startswith("answer.")
+        ):
+            raise HTTPException(status_code=404, detail="Audio response not found")
+        return message
+
+    @staticmethod
+    def _audio_content_type(message: Message) -> str:
+        return (
+            "audio/mpeg"
+            if message.audio_path and message.audio_path.endswith(".mp3")
+            else "audio/wav"
+        )
 
     async def _put(self, path: str, content: bytes, content_type: str) -> None:
         bucket = self.settings.minio_audio_bucket
