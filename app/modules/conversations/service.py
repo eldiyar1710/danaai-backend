@@ -1,5 +1,6 @@
 # ruff: noqa: RUF001
 
+import re
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -36,6 +37,41 @@ _INVALID_CITATIONS = {
     "ru": "Не удалось сформировать ответ с проверенными цитатами.",
     "en": "A response with verified citations could not be produced.",
 }
+_IDENTITY_ANSWERS = {
+    "kk": (
+        "Сәлеметсіз бе! Менің атым Курбанали. Мен DanaAI жүйесіндегі еңбек қауіпсіздігі "
+        "және еңбекті қорғау жөніндегі көмекшімін. Қызметкерлерге бекітілген құжаттардан "
+        "қауіпсіз жұмыс, жеке қорғаныс құралдары, қауіпті факторлар, нұсқамалар және төтенше "
+        "жағдайлардағы әрекеттер туралы ақпарат табуға көмектесемін."
+    ),
+    "ru": (
+        "Здравствуйте! Меня зовут Курбанали. Я помощник DanaAI по технике безопасности и "
+        "охране труда. Я помогаю сотрудникам находить в утверждённых документах информацию "
+        "о безопасной работе, средствах индивидуальной защиты, опасностях, инструктажах и "
+        "действиях при авариях."
+    ),
+    "en": (
+        "Hello! My name is Kurbanali. I am DanaAI's occupational health and safety assistant. "
+        "I help employees find information in approved documents about safe work practices, "
+        "personal protective equipment, hazards, safety briefings, and emergency actions."
+    ),
+}
+_IDENTITY_PATTERNS = (
+    re.compile(
+        r"\b(?:как\s+тебя\s+зовут|кто\s+ты|что\s+ты\s+делаешь|"
+        r"чем\s+ты\s+(?:занимаешься|помогаешь))\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:атың\s+кім|сен\s+кімсің|не\s+істейсің|немен\s+көмектесесің)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:what(?:'s|\s+is)\s+your\s+name|who\s+are\s+you|"
+        r"what\s+do\s+you\s+do|how\s+can\s+you\s+help)\b",
+        re.IGNORECASE,
+    ),
+)
 
 
 class ConversationService:
@@ -114,6 +150,12 @@ class ConversationService:
             "approved sources contain insufficient information. Do not provide hidden reasoning."
         )
 
+    @staticmethod
+    def _identity_answer(query: str, language: str) -> str | None:
+        if any(pattern.search(query) for pattern in _IDENTITY_PATTERNS):
+            return _IDENTITY_ANSWERS[language]
+        return None
+
     async def send(
         self, actor: User, data: ChatRequest, *, user_audio_path: str | None = None
     ) -> ChatResponse:
@@ -142,7 +184,12 @@ class ConversationService:
         model: str | None = None
         usage = TokenUsage(input_tokens=0, output_tokens=0, reasoning_tokens=0)
         generation_status = GenerationStatus.INSUFFICIENT_CONTEXT
-        if retrieval.insufficient_context:
+        response_sources = []
+        identity_answer = self._identity_answer(retrieval.normalized_query, language)
+        if identity_answer is not None:
+            answer = identity_answer
+            generation_status = GenerationStatus.ANSWERED
+        elif retrieval.insufficient_context:
             answer = _INSUFFICIENT[language]
         else:
             try:
@@ -169,13 +216,14 @@ class ConversationService:
             if validation.valid:
                 answer = result.text
                 generation_status = GenerationStatus.ANSWERED
+                response_sources = retrieval.sources
             else:
                 answer = _INVALID_CITATIONS[language]
 
         validation = validate_citations(
             answer,
-            retrieval.sources,
-            require_citation=generation_status == GenerationStatus.ANSWERED,
+            response_sources,
+            require_citation=bool(response_sources),
         )
         assistant = await self.repository.add_message(
             Message(
@@ -187,7 +235,7 @@ class ConversationService:
                 generation_status=generation_status,
             )
         )
-        if generation_status == GenerationStatus.ANSWERED:
+        if response_sources:
             self.repository.add_sources(
                 [
                     MessageSource(
@@ -198,7 +246,7 @@ class ConversationService:
                         relevance_score=source.rerank_score,
                         page_number=source.page_number,
                     )
-                    for source in retrieval.sources
+                    for source in response_sources
                 ]
             )
         await self.session.commit()
@@ -210,7 +258,7 @@ class ConversationService:
             generation_status=generation_status.value,
             model=model,
             usage=usage,
-            sources=retrieval.sources if generation_status == GenerationStatus.ANSWERED else [],
+            sources=response_sources,
             citation_validation=validation,
         )
 
