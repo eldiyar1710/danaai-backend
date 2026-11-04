@@ -48,7 +48,10 @@ class VoiceService:
         )
         try:
             transcript = await self.audio.transcribe(
-                filename=filename, content=content, content_type=content_type
+                filename=filename,
+                content=content,
+                content_type=content_type,
+                language=response_language,
             )
         except AudioProviderError as exc:
             raise HTTPException(
