@@ -29,3 +29,5 @@ def test_openapi_contains_health_contract() -> None:
     assert "/api/v1/speech/transcribe" in schema["paths"]
     assert "/api/v1/speech/synthesize" in schema["paths"]
     assert "/api/v1/speech/voices" in schema["paths"]
+    assert "/api/v1/safety/employees" in schema["paths"]
+    assert "/api/v1/safety/employees/me" in schema["paths"]

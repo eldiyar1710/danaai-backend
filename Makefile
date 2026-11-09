@@ -1,4 +1,4 @@
-.PHONY: install lint format test migrate seed-users up down logs
+.PHONY: install lint format test migrate seed-users seed-safety up down logs
 
 install:
 	python3.12 -m venv .venv
@@ -20,6 +20,9 @@ migrate:
 
 seed-users:
 	docker compose exec semyzbay-api python scripts/seed_users.py
+
+seed-safety:
+	docker compose exec semyzbay-api python scripts/seed_safety_demo.py
 
 up:
 	docker compose up -d --build

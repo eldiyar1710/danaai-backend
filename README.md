@@ -18,6 +18,8 @@ Frontend integration guide: [docs/frontend-api-guide.md](docs/frontend-api-guide
   rotation, logout revocation, and database-backed active-user validation.
 - Role-based access control for `super_admin`, `org_admin`, and `user` roles.
 - Organization and tenant-scoped user administration with soft user deactivation.
+- Five-stage employee safety training with profession-specific work scopes, granular
+  clearance blocking, expiration handling, and administrator-controlled results.
 - Tenant-scoped PDF, DOCX, TXT, and Markdown intake with content validation, SHA-256
   version records, private MinIO storage, Celery job tracking, approval, archive, reindex,
   status, version listing, and authenticated streaming download.
@@ -77,6 +79,20 @@ Repeated runs preserve existing passwords; pass `--reset-passwords` directly to
 `scripts/seed_users.py` when an intentional reset is required. CI can provide passwords via
 `SEED_SUPER_ADMIN_PASSWORD`, `SEED_ORG_ADMIN_PASSWORD`, and `SEED_USER_PASSWORD`.
 
+After migrations, seed the three safety-training demo employees:
+
+```bash
+docker compose exec semyzbay-api python scripts/seed_safety_demo.py
+```
+
+Enter one development password for all three users, or set
+`SEED_SAFETY_EMPLOYEE_PASSWORD` for non-interactive execution. The seed creates Багжан
+Толепберген (electrician, height work blocked), Абай Кождан (welder, all assigned work
+allowed), and Нуртас Бакбергенов (driver, all work blocked). Every employee has five safety
+stages. Repeated runs preserve progress; use `--reset` only to restore the demo statuses.
+Use `--reset-passwords` to apply the configured common demo password to all three existing
+employee accounts without changing their safety progress.
+
 Authentication and administration routes are exposed below `/api/v1`:
 
 - `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`
@@ -96,6 +112,9 @@ Authentication and administration routes are exposed below `/api/v1`:
 - `POST /speech/transcribe` (standalone authenticated speech-to-text)
 - `POST /speech/synthesize` (standalone authenticated MP3/WAV response)
 - `GET /speech/voices` (configured ElevenLabs voice and OpenAI fallback voices)
+- `GET /safety/employees/me` (current employee safety progress and work clearances)
+- `GET /safety/employees`, `GET /safety/employees/{user_id}` (administrator or self)
+- `PATCH /safety/employees/{user_id}/stages/{stage_code}` (administrator updates results)
 - `POST /conversations`, `GET /conversations`
 - `GET /conversations/{conversation_id}/messages`
 

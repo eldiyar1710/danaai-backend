@@ -74,6 +74,7 @@ services:
       SEED_ORG_ADMIN_PASSWORD: ${SEED_ORG_ADMIN_PASSWORD:-}
       SEED_USER_EMAIL: ${SEED_USER_EMAIL:-user@semyzbay.kz}
       SEED_USER_PASSWORD: ${SEED_USER_PASSWORD:-}
+      SEED_SAFETY_EMPLOYEE_PASSWORD: ${SEED_SAFETY_EMPLOYEE_PASSWORD:-}
     command: ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000"]
     ports:
       - "127.0.0.1:${API_PORT:-8000}:8000"

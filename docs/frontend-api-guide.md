@@ -621,7 +621,315 @@ async function openRagDocument(documentUrl: string, accessToken: string): Promis
 Возвращает нормализованный вопрос, найденный контекст, источники, предупреждения и флаг
 `insufficient_context`. Обычному пользовательскому экрану этот endpoint не нужен.
 
-## 12. Ошибки
+## 12. Обучение по ТБ и допуски к работам
+
+> Статус внедрения: маршруты реализованы и проверены локально. До применения миграции и
+> обновления backend на сервере они не появятся в production Swagger.
+
+### 12.1. Текущая логика MVP
+
+Для каждого demo-сотрудника назначено пять этапов:
+
+1. `introductory` — вводный инструктаж;
+2. `profession` — безопасность по профессии;
+3. `ppe_first_aid` — СИЗ и первая помощь;
+4. `special_hazards` — специальный опасный вид работ;
+5. `final_assessment` — итоговая проверка.
+
+Пока сотрудник не проходит вопросы через frontend. Результат вручную фиксирует
+`org_admin` или `super_admin`. Обычный `user` может только просматривать собственные
+результаты. Вход в приложение не блокируется при несданной ТБ: блокируется только
+соответствующий производственный допуск.
+
+| Операция | `user` | `org_admin` | `super_admin` |
+|---|:---:|:---:|:---:|
+| Посмотреть собственную ТБ | да | да | да |
+| Посмотреть сотрудника своей организации | только себя | да | да |
+| Получить список сотрудников | нет | своя организация | все организации |
+| Изменить результат этапа | нет | своя организация | любая организация |
+
+### 12.2. Типы frontend
+
+```ts
+type StoredSafetyStageStatus =
+  | "not_started"
+  | "in_progress"
+  | "passed"
+  | "failed";
+
+// expired вычисляет backend. Отправлять его в PATCH нельзя.
+type SafetyStageStatus = StoredSafetyStageStatus | "expired";
+type OverallSafetyStatus = "allowed" | "partial" | "blocked";
+type WorkScopeStatus = "allowed" | "blocked";
+
+type SafetyStage = {
+  id: string;
+  order: number;
+  code: string;
+  title: string;
+  status: SafetyStageStatus;
+  score: number | null;
+  passing_score: number;
+  activity_code: string | null;
+  passed_at: string | null;
+  expires_at: string | null;
+  notes: string | null;
+};
+
+type WorkScope = {
+  code: string;
+  title: string;
+  status: WorkScopeStatus;
+  blocking_stage_codes: string[];
+};
+
+type EmployeeSafety = {
+  user_id: string;
+  organization_id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  personnel_number: string;
+  position_code: string;
+  position_title: string;
+  hire_year: number;
+  completed_stages: number;
+  total_stages: number;
+  progress_percent: number;
+  overall_status: OverallSafetyStatus;
+  has_any_work_access: boolean;
+  stages: SafetyStage[];
+  work_scopes: WorkScope[];
+};
+```
+
+### 12.3. Получить собственный статус
+
+`GET /api/v1/safety/employees/me`
+
+Доступ: любой авторизованный пользователь с созданным safety-профилем.
+
+```ts
+async function getMySafety(accessToken: string): Promise<EmployeeSafety> {
+  const response = await fetch(`${API_URL}/api/v1/safety/employees/me`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) throw await apiError(response);
+  return response.json();
+}
+```
+
+Пример ответа для электрика:
+
+```json
+{
+  "user_id": "2165cf25-7e8e-4bd0-bddc-c26cc9a63258",
+  "organization_id": "bb0c8469-ac67-46c2-9858-5ab7d9acd709",
+  "email": "bagzhan.tolepbergen@semyzbay.kz",
+  "first_name": "Багжан",
+  "last_name": "Толепберген",
+  "personnel_number": "DEMO-EL-001",
+  "position_code": "electrician",
+  "position_title": "Электрик",
+  "hire_year": 2025,
+  "completed_stages": 4,
+  "total_stages": 5,
+  "progress_percent": 80,
+  "overall_status": "partial",
+  "has_any_work_access": true,
+  "stages": [
+    {
+      "id": "bd8eb539-86ba-4633-ac2f-783cb474661c",
+      "order": 4,
+      "code": "special_hazards",
+      "title": "Безопасность работ на высоте",
+      "status": "failed",
+      "score": 65,
+      "passing_score": 80,
+      "activity_code": "work_at_height",
+      "passed_at": null,
+      "expires_at": null,
+      "notes": "Работа на высоте запрещена до успешной пересдачи"
+    }
+  ],
+  "work_scopes": [
+    {
+      "code": "electrical_work",
+      "title": "Электромонтажные работы",
+      "status": "allowed",
+      "blocking_stage_codes": []
+    },
+    {
+      "code": "work_at_height",
+      "title": "Работы на высоте",
+      "status": "blocked",
+      "blocking_stage_codes": ["special_hazards"]
+    }
+  ]
+}
+```
+
+В реальном ответе массив `stages` содержит все пять этапов. В примере оставлен один этап
+для краткости.
+
+### 12.4. Получить список сотрудников
+
+`GET /api/v1/safety/employees`
+
+Доступ: только `org_admin` и `super_admin`. Ответ: `EmployeeSafety[]`.
+
+- `org_admin` автоматически получает только свою организацию;
+- `super_admin` получает все организации;
+- query-параметр `organization_id` этому маршруту сейчас не передаётся.
+
+```ts
+async function listEmployeeSafety(accessToken: string): Promise<EmployeeSafety[]> {
+  const response = await fetch(`${API_URL}/api/v1/safety/employees`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) throw await apiError(response);
+  return response.json();
+}
+```
+
+### 12.5. Получить конкретного сотрудника
+
+`GET /api/v1/safety/employees/{user_id}`
+
+- сотрудник может запросить только собственный `user_id`;
+- `org_admin` может запросить сотрудника своей организации;
+- `super_admin` может запросить любого сотрудника.
+
+Отсутствие safety-профиля возвращает `404 Employee safety profile not found`.
+
+### 12.6. Изменить результат вручную
+
+`PATCH /api/v1/safety/employees/{user_id}/stages/{stage_code}`
+
+Доступ: только `org_admin` и `super_admin`. В ответ backend возвращает целиком обновлённый
+`EmployeeSafety`, поэтому frontend может сразу заменить объект в кеше.
+
+```ts
+type SafetyStageUpdate = {
+  status: StoredSafetyStageStatus;
+  score?: number | null;
+  expires_at?: string | null;
+  notes?: string | null;
+};
+
+async function updateSafetyStage(
+  accessToken: string,
+  userId: string,
+  stageCode: string,
+  update: SafetyStageUpdate,
+): Promise<EmployeeSafety> {
+  const response = await fetch(
+    `${API_URL}/api/v1/safety/employees/${userId}/stages/${stageCode}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(update),
+    },
+  );
+  if (!response.ok) throw await apiError(response);
+  return response.json();
+}
+```
+
+Успешное прохождение:
+
+```json
+{
+  "status": "passed",
+  "score": 88,
+  "expires_at": "2027-11-10T23:59:59+05:00",
+  "notes": "Повторная проверка знаний"
+}
+```
+
+Неуспешный результат:
+
+```json
+{
+  "status": "failed",
+  "score": 65,
+  "expires_at": null,
+  "notes": "Назначить повторную проверку"
+}
+```
+
+Правила валидации:
+
+- `score` находится в диапазоне от `0` до `100`;
+- для `passed` поле `score` обязательно;
+- для `passed` балл должен быть не ниже `passing_score`, иначе возвращается `422`;
+- `expires_at` для `passed` должен быть в будущем и обязательно содержать timezone;
+- `notes` — не более 2000 символов;
+- `expired` является только вычисляемым ответным статусом и не принимается в PATCH;
+- при переводе из `passed` в другой статус backend очищает `passed_at`.
+
+### 12.7. Как frontend проверяет допуск
+
+Отдельного маршрута `/check-access` сейчас нет. Источником истины является
+`work_scopes` из любого ответа `EmployeeSafety`.
+
+```ts
+function canPerform(employee: EmployeeSafety, activityCode: string): boolean {
+  return employee.work_scopes.some(
+    (scope) => scope.code === activityCode && scope.status === "allowed",
+  );
+}
+```
+
+Не следует использовать только `has_any_work_access`: оно означает, что сотруднику разрешён
+хотя бы один вид работ. Для конкретного задания всегда нужно проверять соответствующий
+`work_scopes[].code`.
+
+Расчёт backend:
+
+- непройденный общий этап с `activity_code = null` блокирует все виды работ сотрудника;
+- непройденный специальный этап блокирует только совпадающий `activity_code`;
+- истёкший `passed` возвращается как `expired` и считается непройденным;
+- `allowed` означает, что разрешены все назначенные виды работ;
+- `partial` означает, что разрешена только часть работ;
+- `blocked` означает, что не разрешён ни один назначенный вид работ.
+
+### 12.8. Рекомендации по интерфейсу
+
+Экран сотрудника:
+
+- прогресс `completed_stages / total_stages` и `progress_percent`;
+- список пяти этапов с баллом и сроком действия;
+- отдельные зелёные/красные карточки для каждого `work_scope`;
+- расшифровка блокировки через `blocking_stage_codes` и соответствующие `stages`;
+- несданная ТБ не должна автоматически разлогинивать пользователя.
+
+Экран администратора:
+
+- таблица сотрудников: ФИО, должность, прогресс, `overall_status`;
+- фильтр на frontend по `allowed`, `partial`, `blocked`;
+- карточка сотрудника с пятью этапами;
+- ручная форма изменения статуса, балла, срока и комментария;
+- подтверждение перед изменением `passed` на `failed` или `not_started`.
+
+### 12.9. Demo-аккаунты
+
+Логины уникальны, чтобы результаты сотрудников не смешивались. Пароль для локальной
+демонстрации одинаковый:
+
+| Сотрудник | Должность | Логин | Ожидаемый статус |
+|---|---|---|---|
+| Багжан Толепберген | Электрик | `bagzhan.tolepbergen@semyzbay.kz` | `partial`, 4/5; высота заблокирована |
+| Абай Кождан | Сварщик | `abai.kozhdan@semyzbay.kz` | `allowed`, 5/5 |
+| Нуртас Бакбергенов | Водитель | `nurtas.bakbergenov@semyzbay.kz` | `blocked`, 0/5 |
+
+Общий локальный пароль: `DanaAI-Demo-2026!`. Эти учётные данные предназначены только для
+демонстрации и не должны использоваться для реальных сотрудников или production.
+
+## 13. Ошибки
 
 Обычная ошибка FastAPI:
 
@@ -683,7 +991,7 @@ async function apiError(response: Response): Promise<Error> {
 }
 ```
 
-## 13. Минимальный набор экранов frontend
+## 14. Минимальный набор экранов frontend
 
 Для MVP достаточно:
 
@@ -693,12 +1001,13 @@ async function apiError(response: Response): Promise<Error> {
 4. Для `org_admin`: список документов, загрузка, прогресс обработки, утверждение, архив.
 5. Для `org_admin`: список пользователей, создание, включение/отключение.
 6. Для `super_admin`: организации и пользователи.
+7. Для сотрудника: пять этапов ТБ и отдельные статусы допуска к видам работ.
 
 Историю чатов можно пока не реализовывать. Backend создаёт технические conversation/message
 записи автоматически, поэтому голосовой и текстовый сценарии работают без отдельного экрана
 истории.
 
-## 14. Полный список маршрутов
+## 15. Полный список маршрутов
 
 Публичные:
 
@@ -724,6 +1033,8 @@ async function apiError(response: Response): Promise<Error> {
 - `POST /api/v1/knowledge-base/search`
 - `GET /api/v1/knowledge-base/stats`
 - `POST /api/v1/rag/retrieve`
+- `GET /api/v1/safety/employees/me`
+- `GET /api/v1/safety/employees/{user_id}` (собственный профиль или администратор)
 
 Только `org_admin`/`super_admin`:
 
@@ -742,6 +1053,8 @@ async function apiError(response: Response): Promise<Error> {
 - `GET /api/v1/users`
 - `PATCH /api/v1/users/{user_id}`
 - `DELETE /api/v1/users/{user_id}`
+- `GET /api/v1/safety/employees`
+- `PATCH /api/v1/safety/employees/{user_id}/stages/{stage_code}`
 
 Только `super_admin`:
 
