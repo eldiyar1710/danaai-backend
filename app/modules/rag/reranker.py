@@ -6,9 +6,13 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Protocol
 
+import structlog
+
 from app.core.config import Settings
 from app.modules.documents.embeddings import embed_dense
 from app.modules.knowledge_base.schemas import SearchHit
+
+logger = structlog.get_logger(__name__)
 
 _TOKEN = re.compile(r"[^\W_]+", re.UNICODE)
 
@@ -53,18 +57,28 @@ def _cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
 
 
 class EmbeddingReranker:
-    """Multilingual semantic reranking without a local cross-encoder."""
+    """Multilingual semantic reranking without a local cross-encoder.
+
+    Lexical overlap is weak for Kazakh and Russian because of inflection, so this is the
+    default. If the embedding provider fails, retrieval degrades to lexical ranking instead
+    of failing the whole chat request.
+    """
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
+        self.fallback = LexicalReranker()
 
     async def rerank(self, query: str, hits: Sequence[SearchHit]) -> list[RankedHit]:
         if not hits:
             return []
-        query_vectors, document_vectors = await asyncio.gather(
-            embed_dense(self.settings, [query], query=True),
-            embed_dense(self.settings, [hit.text for hit in hits], query=False),
-        )
+        try:
+            query_vectors, document_vectors = await asyncio.gather(
+                embed_dense(self.settings, [query], query=True),
+                embed_dense(self.settings, [hit.text for hit in hits], query=False),
+            )
+        except Exception as exc:
+            logger.warning("embedding_rerank_failed_using_lexical", error=type(exc).__name__)
+            return await self.fallback.rerank(query, hits)
         query_vector = query_vectors[0]
         ranked = []
         for hit, document_vector in zip(hits, document_vectors, strict=True):

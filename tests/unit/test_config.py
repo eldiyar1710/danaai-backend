@@ -51,3 +51,10 @@ def test_default_voice_agent_configuration_uses_elevenlabs_with_openai_fallback(
     assert settings.stt_model == "gpt-transcribe"
     assert settings.tts_model == "gpt-realtime-2.1-mini"
     assert settings.tts_voice == "marin"
+
+
+def test_default_reranker_is_semantic_and_chat_uses_history() -> None:
+    settings = Settings(_env_file=None)
+    assert settings.reranker_provider == "embedding"
+    assert settings.chat_history_messages == 6
+    assert settings.chat_query_rewrite is True

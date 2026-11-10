@@ -35,6 +35,17 @@ class ConversationRepository:
         )
         return list(result.scalars())
 
+    async def recent_messages(self, conversation_id: UUID, limit: int) -> list[Message]:
+        if limit <= 0:
+            return []
+        result = await self.session.execute(
+            select(Message)
+            .where(Message.conversation_id == conversation_id)
+            .order_by(Message.created_at.desc())
+            .limit(limit)
+        )
+        return list(reversed(list(result.scalars())))
+
     async def add_message(self, message: Message) -> Message:
         self.session.add(message)
         await self.session.flush()

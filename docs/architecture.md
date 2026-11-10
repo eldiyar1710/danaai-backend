@@ -19,13 +19,15 @@ app/
 │   ├── documents/        versions, parsing, approval, processing
 │   ├── knowledge_base/   tenant-filtered search API
 │   ├── rag/              retrieval, reranking, context, validation
-│   ├── ai/               replaceable provider interfaces
+│   ├── ai/               (planned) replaceable provider interfaces
 │   ├── speech/           STT and TTS
-│   ├── assistant/        text/voice orchestration and WebSocket
-│   ├── conversations/    messages and citations
-│   ├── settings/         global/tenant AI configuration
-│   ├── avatar/           playback metadata only
-│   └── audit/            immutable security audit events
+│   ├── voice/            voice question → grounded chat → synthesized answer
+│   ├── assistant/        (planned) WebSocket orchestration
+│   ├── conversations/    messages, history-aware follow-ups, citations
+│   ├── safety/           training stages, work scopes, clearances
+│   ├── settings/         (model only) global/tenant AI configuration
+│   ├── avatar/           (planned) playback metadata only
+│   └── audit/            (model only) immutable security audit events
 └── workers/              Celery application and tasks
 ```
 
@@ -50,15 +52,23 @@ enforced with a check constraint.
 
 One collection, `semyzbay_documents`, will use named vectors:
 
-- `dense`: BGE-M3 output, cosine distance; its dimension is discovered from the model.
+- `dense`: cosine distance; OpenAI `text-embedding-3-large` at 1024 dimensions by default
+  (`EMBEDDING_PROVIDER=fastembed` switches to a local FastEmbed model such as BGE-M3).
 - `sparse`: BM25-compatible sparse vectors; indices and values are stored independently
   from the dense representation.
+
+Chunks are built per section and page: consecutive paragraphs are merged and then split
+recursively up to the configured chunk size, so a chunk never crosses a section boundary.
+Numbered top-level headings ("1. Общие требования …") become section titles when Word
+heading styles are absent. Server and client are both Qdrant 1.20; any change to parsing,
+chunking or embeddings requires `scripts/reindex_documents.py`.
 
 Every point payload contains `organization_id`, `document_id`, `document_version_id`,
 `chunk_id`, `approval_status`, `is_active`, `language`, `equipment_type`, page/section, and
 text. Keyword payload indexes cover the tenant and lifecycle fields. Retrieval adapters
 construct the mandatory organization + approved + active filter internally before issuing
-dense or sparse prefetch queries. Results are fused with RRF and only then reranked.
+dense or sparse prefetch queries. Results are fused with RRF and only then reranked
+(embedding cosine reranking by default, lexical fallback, optional FastEmbed cross-encoder).
 Changing embedding configuration creates a versioned collection/alias and requires a
 controlled reindex before alias promotion.
 
@@ -83,8 +93,10 @@ infrastructure and authentication phases.
 
 Each phase must pass unit tests plus its integration gate before the next is declared ready.
 
-Phases 1 and 2 have passed their local integration gates. The document pipeline now includes
-validated storage, structured parsing, LangChain chunking, dense and BM25 sparse indexing,
-approval-gated Qdrant activation, and tenant-filtered RRF search. The lightweight local
-FastEmbed model is configurable; production BGE-M3 deployment and multilingual reranking
-remain part of the next quality gate.
+Phases 1 to 5 are implemented: validated storage (including legacy DOC conversion),
+structured parsing, LangChain chunking, dense and BM25 sparse indexing, approval-gated
+Qdrant activation, tenant-filtered RRF search, multilingual reranking, grounded generation
+with citation validation, and history-aware follow-up questions. Phase 6 is partly done:
+chat, SSE with progress events, speech, the voice agent, and safety training are in place;
+the retrieval evaluation harness lives in `scripts/evaluate_rag.py` with datasets under
+`evaluation/datasets`. WebSocket/avatar metadata, audit APIs, and hardening remain.

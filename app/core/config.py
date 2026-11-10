@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     openai_base_url: AnyHttpUrl = AnyHttpUrl("https://api.openai.com/v1")
     openai_reasoning_effort: Literal["none", "low", "medium", "high", "xhigh", "max"] = "low"
     openai_store_responses: bool = False
-    reranker_provider: Literal["lexical", "embedding", "fastembed"] = "lexical"
+    reranker_provider: Literal["lexical", "embedding", "fastembed"] = "embedding"
     reranker_model: str = "BAAI/bge-reranker-v2-m3-int8"
     rag_retrieval_limit: int = Field(default=30, ge=1, le=50)
     rag_rerank_limit: int = Field(default=8, ge=1, le=20)
@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     rag_neighbor_window: int = Field(default=1, ge=0, le=3)
     rag_allow_suspicious_context: bool = False
     rag_translate_kazakh_queries: bool = True
+    chat_history_messages: int = Field(default=6, ge=0, le=20)
+    chat_history_message_chars: int = Field(default=600, ge=100, le=4000)
+    chat_query_rewrite: bool = True
+    chat_rewrite_max_output_tokens: int = Field(default=200, ge=32, le=1000)
 
     stt_provider: Literal["elevenlabs", "openai"] = "elevenlabs"
     stt_fallback_provider: Literal["openai"] = "openai"

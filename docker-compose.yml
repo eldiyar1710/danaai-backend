@@ -41,6 +41,12 @@ x-app-environment: &app-environment
   RAG_NEIGHBOR_WINDOW: ${RAG_NEIGHBOR_WINDOW:-1}
   RAG_ALLOW_SUSPICIOUS_CONTEXT: ${RAG_ALLOW_SUSPICIOUS_CONTEXT:-false}
   RAG_TRANSLATE_KAZAKH_QUERIES: ${RAG_TRANSLATE_KAZAKH_QUERIES:-true}
+  RERANKER_PROVIDER: ${RERANKER_PROVIDER:-embedding}
+  RERANKER_MODEL: ${RERANKER_MODEL:-BAAI/bge-reranker-v2-m3-int8}
+  CHAT_HISTORY_MESSAGES: ${CHAT_HISTORY_MESSAGES:-6}
+  CHAT_HISTORY_MESSAGE_CHARS: ${CHAT_HISTORY_MESSAGE_CHARS:-600}
+  CHAT_QUERY_REWRITE: ${CHAT_QUERY_REWRITE:-true}
+  CHAT_REWRITE_MAX_OUTPUT_TOKENS: ${CHAT_REWRITE_MAX_OUTPUT_TOKENS:-200}
   STT_PROVIDER: ${STT_PROVIDER:-elevenlabs}
   STT_FALLBACK_PROVIDER: ${STT_FALLBACK_PROVIDER:-openai}
   STT_MODEL: ${STT_MODEL:-gpt-transcribe}
@@ -156,9 +162,13 @@ services:
     networks: [semyzbay]
 
   semyzbay-qdrant:
-    image: qdrant/qdrant:v1.15.5
+    # Matches qdrant-client 1.20.x. Qdrant 1.20 cannot open 1.15 storage (payload index
+    # format changed), so it uses a fresh volume; the old `qdrant_data` volume is kept for
+    # rollback. After the first start run `make reindex` (scripts/reindex_documents.py) to
+    # rebuild vectors from PostgreSQL and MinIO.
+    image: qdrant/qdrant:v1.20.0
     volumes:
-      - qdrant_data:/qdrant/storage
+      - qdrant_data_v1_20:/qdrant/storage
     healthcheck:
       test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333'"]
       interval: 5s
@@ -195,5 +205,6 @@ volumes:
   postgres_data:
   redis_data:
   qdrant_data:
+  qdrant_data_v1_20:
   minio_data:
   fastembed_cache:

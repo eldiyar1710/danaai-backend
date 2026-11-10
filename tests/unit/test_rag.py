@@ -89,6 +89,18 @@ async def test_embedding_reranker_prioritizes_cross_language_semantics(monkeypat
     assert results[0].score > results[1].score
 
 
+async def test_embedding_reranker_falls_back_to_lexical_on_provider_error(monkeypatch) -> None:
+    async def failing_embed_dense(settings, texts, *, query):
+        raise RuntimeError("provider down")
+
+    monkeypatch.setattr("app.modules.rag.reranker.embed_dense", failing_embed_dense)
+    results = await EmbeddingReranker(Settings()).rerank(
+        "fire safety",
+        [hit("unrelated paragraph", 0.5), hit("fire safety procedure", 0.5)],
+    )
+    assert results[0].hit.text == "fire safety procedure"
+
+
 def test_context_is_deduplicated_bounded_and_cited() -> None:
     first = hit("Wear a helmet before entering the work zone.", 0.8)
     duplicate = hit("  wear A HELMET before entering the work zone. ", 0.7)

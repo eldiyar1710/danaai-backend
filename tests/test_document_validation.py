@@ -35,3 +35,14 @@ def test_rejects_non_utf8_text() -> None:
     with pytest.raises(HTTPException) as error:
         validate_document("manual.txt", b"\xff", "text/plain")
     assert error.value.status_code == 422
+
+
+def test_accepts_legacy_word_document() -> None:
+    content = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\x00" * 512
+    assert validate_document("manual.doc", content, "application/msword") == "application/msword"
+
+
+def test_rejects_fake_doc() -> None:
+    with pytest.raises(HTTPException) as error:
+        validate_document("manual.doc", b"{\\rtf1 not a word file}", "application/msword")
+    assert error.value.status_code == 422

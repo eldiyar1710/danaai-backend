@@ -59,3 +59,7 @@ class ChatResponse(BaseModel):
     usage: TokenUsage
     sources: list[RAGSource]
     citation_validation: CitationValidation
+    standalone_query: str | None = Field(
+        default=None,
+        description="Follow-up question rewritten with conversation history for retrieval",
+    )

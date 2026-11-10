@@ -4,9 +4,13 @@ from zipfile import BadZipFile, ZipFile
 
 from fastapi import HTTPException
 
-ALLOWED_SUFFIXES = {".pdf", ".docx", ".txt", ".md"}
+# Legacy Word 97-2003 files are OLE2 compound documents.
+OLE2_SIGNATURE = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+
+ALLOWED_SUFFIXES = {".pdf", ".docx", ".doc", ".txt", ".md"}
 MIME_BY_SUFFIX = {
     ".pdf": "application/pdf",
+    ".doc": "application/msword",
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ".txt": "text/plain",
     ".md": "text/markdown",
@@ -16,12 +20,14 @@ MIME_BY_SUFFIX = {
 def validate_document(filename: str, content: bytes, declared_mime: str | None) -> str:
     suffix = Path(filename).suffix.lower()
     if suffix not in ALLOWED_SUFFIXES:
-        raise HTTPException(status_code=415, detail="Supported formats: PDF, DOCX, TXT, MD")
+        raise HTTPException(status_code=415, detail="Supported formats: PDF, DOCX, DOC, TXT, MD")
     expected_mime = MIME_BY_SUFFIX[suffix]
     if declared_mime and declared_mime not in {expected_mime, "application/octet-stream"}:
         raise HTTPException(status_code=415, detail="File extension and MIME type do not match")
     if suffix == ".pdf" and not content.startswith(b"%PDF-"):
         raise HTTPException(status_code=422, detail="Invalid PDF content")
+    if suffix == ".doc" and not content.startswith(OLE2_SIGNATURE):
+        raise HTTPException(status_code=422, detail="Invalid DOC content")
     if suffix == ".docx":
         try:
             with ZipFile(BytesIO(content)) as archive:

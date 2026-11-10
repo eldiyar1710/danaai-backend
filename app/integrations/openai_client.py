@@ -51,13 +51,22 @@ class OpenAIResponsesClient:
                     parts.append(str(content["text"]))
         return "".join(parts).strip()
 
-    async def generate(self, *, instructions: str, input_text: str) -> LLMResult:
+    async def generate(
+        self,
+        *,
+        instructions: str,
+        input_text: str,
+        max_output_tokens: int | None = None,
+    ) -> LLMResult:
         models = list(dict.fromkeys([self.settings.llm_model, self.settings.llm_fallback_model]))
         last_error: str | None = None
         for model in models:
             try:
                 return await self._generate_with_model(
-                    model=model, instructions=instructions, input_text=input_text
+                    model=model,
+                    instructions=instructions,
+                    input_text=input_text,
+                    max_output_tokens=max_output_tokens,
                 )
             except LLMProviderError as exc:
                 last_error = str(exc)
@@ -66,7 +75,12 @@ class OpenAIResponsesClient:
         raise LLMProviderError(last_error or "OpenAI generation failed")
 
     async def _generate_with_model(
-        self, *, model: str, instructions: str, input_text: str
+        self,
+        *,
+        model: str,
+        instructions: str,
+        input_text: str,
+        max_output_tokens: int | None = None,
     ) -> LLMResult:
         url = f"{str(self.settings.openai_base_url).rstrip('/')}/responses"
         body = {
@@ -74,7 +88,7 @@ class OpenAIResponsesClient:
             "instructions": instructions,
             "input": input_text,
             "reasoning": {"effort": self.settings.openai_reasoning_effort},
-            "max_output_tokens": self.settings.llm_max_output_tokens,
+            "max_output_tokens": max_output_tokens or self.settings.llm_max_output_tokens,
             "store": self.settings.openai_store_responses,
         }
         try:

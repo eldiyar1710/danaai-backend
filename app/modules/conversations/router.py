@@ -4,7 +4,8 @@ from collections.abc import AsyncIterator
 from typing import cast
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request
+import structlog
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from qdrant_client import AsyncQdrantClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,12 +21,13 @@ from app.modules.conversations.schemas import (
     ConversationResponse,
     MessageResponse,
 )
-from app.modules.conversations.service import ConversationService
+from app.modules.conversations.service import ChatStage, ConversationService
 from app.modules.knowledge_base.service import KnowledgeBaseService
 from app.modules.rag.reranker import create_reranker
 from app.modules.rag.service import RAGService
 from app.modules.users.models import User
 
+logger = structlog.get_logger(__name__)
 router = APIRouter(tags=["conversations"])
 
 
@@ -86,9 +88,40 @@ async def stream_message(
     actor: User = Depends(get_current_user),
     conversations: ConversationService = Depends(service),
 ) -> StreamingResponse:
-    result = await conversations.send(actor, data)
+    """Stream progress while the grounded answer is produced.
+
+    Events: ``status`` (stage: rewriting | retrieving | generating | validating), then
+    ``metadata``, ``text_delta`` chunks and ``completed``. The answer text is only sent
+    after citation validation, so ungrounded model output never reaches the client. Errors
+    after the stream has started arrive as an ``error`` event with ``status_code``.
+    """
+    stages: asyncio.Queue[ChatStage] = asyncio.Queue()
+
+    async def on_stage(stage: ChatStage) -> None:
+        await stages.put(stage)
 
     async def events() -> AsyncIterator[str]:
+        task = asyncio.create_task(conversations.send(actor, data, on_stage=on_stage))
+        try:
+            while not task.done() or not stages.empty():
+                getter = asyncio.ensure_future(stages.get())
+                done, _ = await asyncio.wait({getter, task}, return_when=asyncio.FIRST_COMPLETED)
+                if getter in done:
+                    yield _sse("status", {"stage": getter.result()})
+                else:
+                    getter.cancel()
+            try:
+                result = task.result()
+            except HTTPException as exc:
+                yield _sse("error", {"status_code": exc.status_code, "detail": exc.detail})
+                return
+            except Exception:
+                logger.exception("chat_stream_failed")
+                yield _sse("error", {"status_code": 500, "detail": "Internal server error"})
+                return
+        finally:
+            if not task.done():
+                task.cancel()
         yield _sse(
             "metadata",
             {
@@ -96,6 +129,7 @@ async def stream_message(
                 "message_id": str(result.message_id),
                 "model": result.model,
                 "status": result.generation_status,
+                "standalone_query": result.standalone_query,
             },
         )
         for offset in range(0, len(result.answer), 80):

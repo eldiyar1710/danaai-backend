@@ -1,0 +1,28 @@
+# Стартовый набор для проверки поиска по инструкциям из TB/. Ожидаемые документы указаны
+# номерами инструкций и сравниваются с заголовком документа, поэтому при загрузке
+# заголовок должен содержать номер ("Инструкция №90 - по ТБ при работе на высоте").
+# Набор составлен по названиям инструкций: перед использованием как эталона его должен
+# проверить специалист по ОТ и дополнить реальными вопросами сотрудников.
+{"id": "ru-height-01", "language": "ru", "query": "Какие меры безопасности нужны при работе на высоте?", "expected_documents": ["90"]}
+{"id": "ru-mason-01", "language": "ru", "query": "Какие требования к каменщику для допуска к работе?", "expected_documents": ["109"], "expected_text": ["медицинск"]}
+{"id": "ru-welder-01", "language": "ru", "query": "Безопасные приемы работы газоэлектросварщика", "expected_documents": ["20"]}
+{"id": "ru-firstaid-01", "language": "ru", "query": "Как оказать первую помощь пострадавшему при несчастном случае?", "expected_documents": ["54"]}
+{"id": "ru-tires-01", "language": "ru", "query": "Как безопасно накачивать шины?", "expected_documents": ["139", "85", "60"]}
+{"id": "ru-people-01", "language": "ru", "query": "Как организовать безопасную перевозку людей?", "expected_documents": ["15"]}
+{"id": "ru-forklift-01", "language": "ru", "query": "Требования безопасности для водителя автопогрузчика", "expected_documents": ["16", "58"]}
+{"id": "ru-oxygen-01", "language": "ru", "query": "Как безопасно работать с кислородными баллонами?", "expected_documents": ["18", "56"]}
+{"id": "ru-lathe-01", "language": "ru", "query": "Правила безопасной работы на токарном станке", "expected_documents": ["21", "79"]}
+{"id": "ru-emergency-01", "language": "ru", "query": "Что должен делать персонал при чрезвычайной ситуации?", "expected_documents": ["120"]}
+{"id": "ru-medical-01", "language": "ru", "query": "Порядок медицинского освидетельствования водителей", "expected_documents": ["103"]}
+{"id": "ru-accident-01", "language": "ru", "query": "Как проводится служебное расследование ДТП?", "expected_documents": ["104"]}
+{"id": "ru-stopcard-01", "language": "ru", "query": "Как применять стоп-карту?", "expected_documents": ["стоп карт", "стоп-карт"]}
+{"id": "ru-core-01", "language": "ru", "query": "Как безопасно извлекать керн?", "expected_documents": ["138"]}
+{"id": "ru-fire-01", "language": "ru", "query": "Как содержать технические средства противопожарной защиты?", "expected_documents": ["100"]}
+{"id": "ru-ppe-01", "language": "ru", "query": "Как правильно применять средства индивидуальной защиты?", "expected_documents": ["80"]}
+{"id": "ru-crane-01", "language": "ru", "query": "Безопасная работа с грузоподъемными кранами", "expected_documents": ["23", "55", "75"]}
+{"id": "ru-electro-01", "language": "ru", "query": "Требования безопасности при работе с электроинструментом", "expected_documents": ["136", "67"]}
+{"id": "kk-height-01", "language": "kk", "query": "Биіктікте жұмыс істегенде қандай қауіпсіздік шаралары қажет?", "expected_documents": ["90"]}
+{"id": "kk-welder-01", "language": "kk", "query": "Газэлектрдәнекерлеушінің қауіпсіз жұмыс тәсілдері қандай?", "expected_documents": ["20"]}
+{"id": "kk-firstaid-01", "language": "kk", "query": "Жазатайым оқиға кезінде алғашқы көмек қалай көрсетіледі?", "expected_documents": ["54"]}
+{"id": "kk-emergency-01", "language": "kk", "query": "Төтенше жағдай кезінде қызметкерлер не істеуі керек?", "expected_documents": ["120"]}
+{"id": "kk-ppe-01", "language": "kk", "query": "Жеке қорғаныс құралдарын қалай дұрыс қолдану керек?", "expected_documents": ["80"]}
