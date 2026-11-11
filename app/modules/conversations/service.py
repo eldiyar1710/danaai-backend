@@ -29,6 +29,8 @@ from app.modules.rag.language import detect_language, normalize_query
 from app.modules.rag.schemas import RAGRetrieveRequest
 from app.modules.rag.service import RAGService
 from app.modules.users.models import User
+from app.modules.videos.schemas import VideoSuggestion
+from app.modules.videos.service import VideoMatcher
 
 logger = structlog.get_logger(__name__)
 
@@ -155,24 +157,86 @@ _CASUAL_PATTERNS = {
 _SMALL_TALK_FILLERS = frozenset(
     {
         # ru
-        "привет", "здравствуй", "здравствуйте", "добрый", "доброе", "день", "вечер", "утро",
-        "скажи", "скажите", "пожалуйста", "целом", "вообще", "кстати", "сегодня", "сейчас",
-        "тебя", "тебе", "вас", "вам", "мне", "это", "вот", "ещё", "еще", "курбанали",
-        "спасибо", "благодарю", "большое", "очень",
+        "привет",
+        "здравствуй",
+        "здравствуйте",
+        "добрый",
+        "доброе",
+        "день",
+        "вечер",
+        "утро",
+        "скажи",
+        "скажите",
+        "пожалуйста",
+        "целом",
+        "вообще",
+        "кстати",
+        "сегодня",
+        "сейчас",
+        "тебя",
+        "тебе",
+        "вас",
+        "вам",
+        "мне",
+        "это",
+        "вот",
+        "ещё",
+        "еще",
+        "курбанали",
+        "спасибо",
+        "благодарю",
+        "большое",
+        "очень",
         # kk
-        "сәлем", "сәлеметсіз", "қайырлы", "таң", "күн", "кеш", "сен", "сіз", "сізге",
-        "саған", "маған", "бүгін", "қазір", "және", "айтшы", "айтыңызшы", "өтінемін",
-        "рақмет", "көп", "үлкен",
+        "сәлем",
+        "сәлеметсіз",
+        "қайырлы",
+        "таң",
+        "күн",
+        "кеш",
+        "сен",
+        "сіз",
+        "сізге",
+        "саған",
+        "маған",
+        "бүгін",
+        "қазір",
+        "және",
+        "айтшы",
+        "айтыңызшы",
+        "өтінемін",
+        "рақмет",
+        "көп",
+        "үлкен",
         # en
-        "hello", "hey", "good", "morning", "afternoon", "evening", "please", "tell",
-        "the", "and", "you", "your", "today", "now", "well", "anyway", "kurbanali",
-        "thanks", "thank", "much", "very", "there",
+        "hello",
+        "hey",
+        "good",
+        "morning",
+        "afternoon",
+        "evening",
+        "please",
+        "tell",
+        "the",
+        "and",
+        "you",
+        "your",
+        "today",
+        "now",
+        "well",
+        "anyway",
+        "kurbanali",
+        "thanks",
+        "thank",
+        "much",
+        "very",
+        "there",
     }
 )
 _WORD_PATTERN = re.compile(r"[^\W\d_]+", re.UNICODE)
 _SMALL_TALK_MAX_WORDS = 15
 
-ChatStage = Literal["rewriting", "retrieving", "generating", "validating"]
+ChatStage = Literal["rewriting", "retrieving", "generating", "validating", "matching_videos"]
 ProgressCallback = Callable[[ChatStage], Awaitable[None]]
 _CITATION_MARKER = re.compile(r"\s*\[S\d+\]")
 
@@ -219,11 +283,13 @@ class ConversationService:
         session: AsyncSession,
         rag: RAGService,
         llm: OpenAIResponsesClient,
+        videos: VideoMatcher | None = None,
     ) -> None:
         self.session = session
         self.repository = ConversationRepository(session)
         self.rag = rag
         self.llm = llm
+        self.videos = videos
 
     def _tenant(self, actor: User, requested: UUID | None) -> UUID:
         return self.rag.knowledge_base.tenant(actor, requested)
@@ -356,9 +422,7 @@ class ConversationService:
         try:
             result = await self.llm.generate(
                 instructions=_REWRITE_INSTRUCTIONS,
-                input_text=(
-                    f"CONVERSATION HISTORY:\n{history_text}\n\nLATEST MESSAGE:\n{query}"
-                ),
+                input_text=(f"CONVERSATION HISTORY:\n{history_text}\n\nLATEST MESSAGE:\n{query}"),
                 max_output_tokens=self.rag.settings.chat_rewrite_max_output_tokens,
             )
         except LLMProviderError as exc:
@@ -416,9 +480,7 @@ class ConversationService:
                 model=None,
                 usage=TokenUsage(input_tokens=0, output_tokens=0, reasoning_tokens=0),
                 sources=[],
-                citation_validation=validate_citations(
-                    direct_answer, [], require_citation=False
-                ),
+                citation_validation=validate_citations(direct_answer, [], require_citation=False),
             )
 
         # Resolve the conversation first: ownership and tenant checks must pass before its
@@ -531,6 +593,16 @@ class ConversationService:
                 ]
             )
         await self.session.commit()
+        videos: list[VideoSuggestion] = []
+        if self.videos is not None and response_sources:
+            cited = set(validation.citations)
+            await self._stage(on_stage, "matching_videos")
+            videos = await self.videos.suggest(
+                actor,
+                conversation.organization_id,
+                retrieval_query,
+                [s.document_id for s in response_sources if s.citation_id in cited],
+            )
         return ChatResponse(
             conversation_id=conversation.id,
             message_id=assistant.id,
@@ -542,6 +614,7 @@ class ConversationService:
             sources=response_sources,
             citation_validation=validation,
             standalone_query=retrieval_query if retrieval_query != normalized_query else None,
+            videos=videos,
         )
 
     async def attach_audio(self, actor: User, message_id: UUID, audio_path: str) -> None:

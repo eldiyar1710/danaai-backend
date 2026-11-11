@@ -347,7 +347,7 @@ async function loadProtectedAudio(path: string, accessToken: string): Promise<st
 
 | Событие | Данные | Когда |
 |---|---|---|
-| `status` | `{"stage": "rewriting" \| "retrieving" \| "generating" \| "validating"}` | по ходу работы, сразу после начала запроса |
+| `status` | `{"stage": "rewriting" \| "retrieving" \| "generating" \| "validating" \| "matching_videos"}` | по ходу работы, сразу после начала запроса |
 | `metadata` | `conversation_id`, `message_id`, `model`, `status`, `standalone_query` | ответ готов и проверен |
 | `text_delta` | `{"delta": "..."}` | текст ответа частями |
 | `completed` | полный `ChatResponse` | последнее событие |
@@ -355,9 +355,11 @@ async function loadProtectedAudio(path: string, accessToken: string): Promise<st
 
 Этапы `status`: `rewriting` — уточняющий вопрос переписывается с учётом истории (бывает
 только в продолжении диалога); `retrieving` — поиск по документам; `generating` — модель
-пишет ответ; `validating` — проверка ссылок. Если в документах ничего не найдено, после
+пишет ответ; `validating` — проверка ссылок; `matching_videos` — подбор обучающего видео
+(только для ответа со ссылками). Если в документах ничего не найдено, после
 `retrieving` сразу приходит `metadata`. Рекомендуемые подписи: «Уточняю вопрос…»,
-«Ищу в инструкциях…», «Формирую ответ…», «Проверяю источники…».
+«Ищу в инструкциях…», «Формирую ответ…», «Проверяю источники…», «Подбираю видео…».
+Подобранные видео приходят в поле `videos` события `completed` (в `metadata` их нет).
 
 Поток всегда отвечает HTTP 200, кроме ошибок авторизации и валидации тела запроса (401/422
 до начала потока). Ошибки доступа к диалогу, поиска и LLM приходят событием `error` с
@@ -412,6 +414,59 @@ async function openRagDocument(documentUrl: string, accessToken: string): Promis
 
 Обычный `user` может скачать только утверждённый активный документ своей организации.
 Неутверждённые, архивные документы и документы другого tenant возвращают `404`.
+
+### Видео рядом с ответом
+
+`ChatResponse` (а значит и `/voice/ask`, и событие `completed` в SSE) содержит поле
+`videos` — утверждённые обучающие ролики, иллюстрирующие процитированные инструкции.
+Обычно это 0 или 1 ролик. Видео не является источником фактов и не получает маркер
+`[S#]`: показывайте его после текста ответа, отдельной карточкой.
+
+```ts
+type VideoSuggestion = {
+  id: string;
+  title: string;
+  description: string;
+  duration_seconds: number | null;
+  width: number | null;
+  height: number | null;
+  mime_type: string;             // "video/mp4"
+  stream_url: string;            // относительный путь с подписанным token
+  thumbnail_url: string | null;  // тоже с token
+  expires_at: string;            // ISO-время, когда ссылки перестанут работать
+  score: number;                 // похожесть вопроса на карточку видео, 0..1
+  linked_document_ids: string[]; // процитированные инструкции, к которым относится ролик
+};
+```
+
+Ролик показывается, только если одновременно:
+
+1. ответ имеет статус `answered` (не «недостаточно информации», не small talk);
+2. в ответе процитирована инструкция, к которой администратор привязал ролик;
+3. вопрос достаточно похож на карточку ролика (название, описание, примеры вопросов).
+
+`stream_url` и `thumbnail_url` подписаны коротким токеном (по умолчанию 60 минут), поэтому
+их можно сразу ставить в `<video src>` и `<img src>` — заголовок `Authorization` не
+нужен, перемотка работает через HTTP Range:
+
+```tsx
+{answer.videos.map((video) => (
+  <figure key={video.id}>
+    <video
+      controls
+      preload="metadata"
+      playsInline
+      poster={video.thumbnail_url ? API_URL + video.thumbnail_url : undefined}
+      src={API_URL + video.stream_url}
+    />
+    <figcaption>{video.title}</figcaption>
+  </figure>
+))}
+```
+
+Ссылки не продлеваются: если пользователь вернулся к старому ответу после `expires_at`,
+плеер получит `401` — задайте вопрос заново или откройте ролик из списка видео
+администратора. Архивированные и удалённые ролики перестают проигрываться сразу (`404`).
 
 ## 7. Отдельные speech-функции
 
@@ -536,6 +591,57 @@ async function openRagDocument(documentUrl: string, accessToken: string): Promis
 - `DELETE /api/v1/documents/{id}` — окончательное удаление, ответ `204`.
 
 Скачивание также нужно делать через авторизованный `fetch` и `Blob URL`, как аудио.
+
+### Обучающие видео
+
+Ролики живут отдельно от документов, но проходят такой же путь: загрузка → обработка →
+утверждение. Ассистент предлагает только утверждённые ролики своей организации.
+
+**Загрузка** — `POST /api/v1/videos`, `multipart/form-data`:
+
+| Поле | Обязательно | Описание |
+|---|---|---|
+| `file` | да | MP4, M4V, MOV или WEBM, до 500 MB и 30 минут |
+| `title` | да | название карточки, 2–500 символов |
+| `description` | нет | что показано в ролике; участвует в подборе |
+| `example_questions` | нет | повторяйте поле для каждого вопроса, на который отвечает ролик |
+| `linked_document_ids` | для утверждения | повторяйте поле для каждой инструкции, которую иллюстрирует ролик |
+| `language` | нет | `kk`, `ru` (по умолчанию) или `en` |
+| `organization_id` | только `super_admin` | организация |
+
+```ts
+const form = new FormData();
+form.append("file", file);
+form.append("title", "Проверка страховочной привязи и стропа");
+form.append("description", "Осмотр швов, бирки; после рывка — вывести из эксплуатации");
+["Как проверить страховочную привязь?", "Можно ли пользоваться поясом после рывка?"]
+  .forEach((q) => form.append("example_questions", q));
+form.append("linked_document_ids", instruction90Id);
+const video = await api("/api/v1/videos", { method: "POST", body: form });
+```
+
+Ответ — `VideoRead` со `status: "processing"`. Воркер определяет длительность и размер
+кадра, переносит индекс MP4 в начало файла (видео начинает играть до полной загрузки),
+делает превью и считает векторы карточки. Опрашивайте `GET /api/v1/videos/{id}` раз в
+2–3 секунды до `ready` или `failed` (`error_message` объясняет причину).
+
+Статусы: `processing` → `ready` → `approved`; `archived`; `failed`.
+
+**Утверждение** — `POST /api/v1/videos/{id}/approve`. Требует статус `ready` и хотя бы одну
+привязанную инструкцию (иначе `422`). Проверьте ролик перед утверждением: `VideoRead`
+для администратора содержит подписанные `stream_url` и `thumbnail_url` уже в статусе
+`ready`.
+
+**Редактирование** — `PATCH /api/v1/videos/{id}` с JSON (`title`, `description`,
+`example_questions`, `linked_document_ids`, `language` — любые из них). Изменение текста
+карточки сразу пересчитывает векторы. Утверждённый ролик нельзя отвязать от всех
+инструкций.
+
+Лучший способ улучшить подбор — добавлять в `example_questions` реальные формулировки
+сотрудников, в том числе на казахском.
+
+Остальные маршруты: `GET /api/v1/videos?status=approved` (список),
+`POST /api/v1/videos/{id}/archive`, `DELETE /api/v1/videos/{id}` (удаляет и файл).
 
 ## 9. Управление пользователями
 
@@ -1064,6 +1170,8 @@ async function apiError(response: Response): Promise<Error> {
 - `POST /api/v1/rag/retrieve`
 - `GET /api/v1/safety/employees/me`
 - `GET /api/v1/safety/employees/{user_id}` (собственный профиль или администратор)
+- `GET /api/v1/videos/{video_id}/stream` и `/thumbnail` (утверждённые ролики; вместо
+  access token можно передать подписанный `?token=` из `stream_url`)
 
 Только `org_admin`/`super_admin`:
 
@@ -1084,6 +1192,13 @@ async function apiError(response: Response): Promise<Error> {
 - `DELETE /api/v1/users/{user_id}`
 - `GET /api/v1/safety/employees`
 - `PATCH /api/v1/safety/employees/{user_id}/stages/{stage_code}`
+- `POST /api/v1/videos`
+- `GET /api/v1/videos`
+- `GET /api/v1/videos/{video_id}`
+- `PATCH /api/v1/videos/{video_id}`
+- `POST /api/v1/videos/{video_id}/approve`
+- `POST /api/v1/videos/{video_id}/archive`
+- `DELETE /api/v1/videos/{video_id}`
 
 Только `super_admin`:
 

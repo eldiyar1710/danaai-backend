@@ -323,3 +323,52 @@ def test_stream_reports_errors_as_event() -> None:
         ("status", {"stage": "retrieving"}),
         ("error", {"status_code": 403, "detail": "Conversation access denied"}),
     ]
+
+
+async def test_answer_includes_videos_for_cited_documents_only() -> None:
+    service, _repository, _retrieve, _generate, actor = _build(
+        [], [_llm_result("Нужна страховочная привязь [S1].")]
+    )
+    calls: list[tuple[str, list[UUID]]] = []
+
+    class FakeMatcher:
+        async def suggest(
+            self, _actor: Any, _org: UUID, query: str, cited: list[UUID]
+        ) -> list[Any]:
+            calls.append((query, cited))
+            return []
+
+    service.videos = cast(Any, FakeMatcher())
+    stages: list[str] = []
+
+    async def on_stage(stage: str) -> None:
+        stages.append(stage)
+
+    response = await service.send(
+        actor, ChatRequest(query="Какие СИЗ нужны на высоте?"), on_stage=on_stage
+    )
+
+    assert response.videos == []
+    assert len(calls) == 1
+    assert calls[0][0] == "Какие СИЗ нужны на высоте?"
+    assert calls[0][1] == [response.sources[0].document_id]
+    assert stages[-1] == "matching_videos"
+
+
+async def test_no_video_lookup_without_grounded_answer() -> None:
+    service, _repository, _retrieve, _generate, actor = _build(
+        [], [_llm_result("Ответ без ссылок.")]
+    )
+    called = False
+
+    class FakeMatcher:
+        async def suggest(self, *_args: Any) -> list[Any]:
+            nonlocal called
+            called = True
+            return []
+
+    service.videos = cast(Any, FakeMatcher())
+    response = await service.send(actor, ChatRequest(query="Какие СИЗ нужны на высоте?"))
+
+    assert response.generation_status == "insufficient_context"
+    assert called is False

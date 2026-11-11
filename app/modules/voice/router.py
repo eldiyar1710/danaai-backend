@@ -16,6 +16,7 @@ from app.modules.knowledge_base.service import KnowledgeBaseService
 from app.modules.rag.reranker import create_reranker
 from app.modules.rag.service import RAGService
 from app.modules.users.models import User
+from app.modules.videos.service import VideoMatcher
 from app.modules.voice.schemas import VoiceAudioMetadataResponse, VoiceChatResponse
 from app.modules.voice.service import VoiceService
 
@@ -31,7 +32,9 @@ def service(
         settings, cast(AsyncQdrantClient, request.app.state.qdrant)
     )
     rag = RAGService(settings, knowledge_base, create_reranker(settings))
-    conversations = ConversationService(session, rag, OpenAIResponsesClient(settings))
+    conversations = ConversationService(
+        session, rag, OpenAIResponsesClient(settings), VideoMatcher(session, settings)
+    )
     return VoiceService(
         settings,
         cast(Minio, request.app.state.minio),

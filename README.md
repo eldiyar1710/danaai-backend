@@ -177,6 +177,35 @@ The former public MinIO Community container registry stopped allowing anonymous 
 release from its official source tag. This archived release receives no security updates;
 production must use a supported MinIO AIStor deployment or a reviewed S3-compatible service.
 
+## Training videos
+
+Approved training clips (`app/modules/videos`) are attached to grounded answers in the
+`videos` field of `/chat/messages`, `/voice/ask` and the SSE `completed` event. A video is
+never a source of facts: it is suggested only when the answer is `answered`, cites an
+instruction the video is linked to, and the question is close enough to the video card
+(cosine similarity of the query embedding to the card text and each example question,
+`VIDEO_MATCH_MIN_SCORE`, default 0.55). Card vectors are stored in PostgreSQL; a tenant
+has at most hundreds of videos, so matching needs no extra Qdrant collection and costs one
+query embedding only when a candidate exists.
+
+Uploads go to the `MINIO_VIDEOS_BUCKET`; the worker (ffmpeg is installed in
+`docker/Dockerfile.worker`) probes duration and frame size, remuxes MP4/MOV with
+`+faststart`, extracts a thumbnail and embeds the card. Playback supports HTTP Range and
+short-lived signed links (`VIDEO_URL_TTL_MINUTES`), so `<video src>` works without an
+`Authorization` header. The bundled nginx allows 600 MB bodies on `/api/v1/videos`; a
+production reverse proxy in front of the API needs the same.
+
+The five work-at-height clips and their cards are seeded with:
+
+```bash
+SEED_EMAIL=orgadmin@semyzbay.kz python scripts/seed_safety_videos.py --videos-dir TB/videos
+```
+
+Clips 1-4 are approved. Clip 5 (transfer with two lanyards) stays in review because the
+approved instructions do not describe that procedure yet; approve it once a safety
+specialist has signed it off. Tune `VIDEO_MATCH_MIN_SCORE` on real questions: too high
+hides relevant clips, too low shows clips next to loosely related answers.
+
 ## Upgrading Qdrant 1.15 → 1.20 and reindexing
 
 Compose now runs `qdrant/qdrant:v1.20.0`, matching `qdrant-client` 1.20. Qdrant 1.20 cannot

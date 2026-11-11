@@ -19,4 +19,4 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
     broker_transport_options={"visibility_timeout": 3600},
 )
-celery_app.conf.imports = ("app.modules.documents.tasks",)
+celery_app.conf.imports = ("app.modules.documents.tasks", "app.modules.videos.tasks")

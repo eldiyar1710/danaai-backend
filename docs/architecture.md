@@ -25,6 +25,7 @@ app/
 │   ├── assistant/        (planned) WebSocket orchestration
 │   ├── conversations/    messages, history-aware follow-ups, citations
 │   ├── safety/           training stages, work scopes, clearances
+│   ├── videos/           approved training clips suggested next to grounded answers
 │   ├── settings/         (model only) global/tenant AI configuration
 │   ├── avatar/           (planned) playback metadata only
 │   └── audit/            (model only) immutable security audit events

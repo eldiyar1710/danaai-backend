@@ -81,6 +81,7 @@ class Settings(BaseSettings):
     minio_documents_bucket: str = "semyzbay-documents"
     minio_audio_bucket: str = "semyzbay-audio"
     minio_generated_bucket: str = "semyzbay-generated"
+    minio_videos_bucket: str = "semyzbay-videos"
 
     jwt_secret_key: SecretStr = SecretStr("replace_with_at_least_32_random_characters")
     jwt_algorithm: str = "HS256"
@@ -90,6 +91,11 @@ class Settings(BaseSettings):
     max_upload_size_bytes: int = Field(default=50 * 1024 * 1024, ge=1)
     max_audio_upload_size_bytes: int = Field(default=25 * 1024 * 1024, ge=1)
     max_audio_duration_seconds: int = Field(default=300, ge=1)
+    max_video_upload_size_bytes: int = Field(default=500 * 1024 * 1024, ge=1)
+    max_video_duration_seconds: int = Field(default=1800, ge=1)
+    video_match_min_score: float = Field(default=0.55, ge=0, le=1)
+    video_max_suggestions: int = Field(default=1, ge=0, le=5)
+    video_url_ttl_minutes: int = Field(default=60, ge=1, le=1440)
     provider_timeout_seconds: float = Field(default=30, gt=0)
     storage_retention_days: int = Field(default=365, ge=1)
     healthcheck_timeout_seconds: float = Field(default=3, gt=0, le=30)

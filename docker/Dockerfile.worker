@@ -8,9 +8,11 @@ RUN groupadd --system --gid 10001 semyzbay \
     && useradd --system --uid 10001 --gid semyzbay --home-dir /app semyzbay
 
 # LibreOffice Writer (headless) converts legacy Word 97-2003 .doc uploads to DOCX before
-# parsing. Only the worker parses documents, so the API image stays small.
+# parsing; ffmpeg probes training videos, makes MP4 streamable and extracts thumbnails.
+# Only the worker processes files, so the API image stays small.
 RUN apt-get update \
-    && apt-get install --yes --no-install-recommends libreoffice-writer-nogui fonts-dejavu-core \
+    && apt-get install --yes --no-install-recommends \
+        libreoffice-writer-nogui fonts-dejavu-core ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

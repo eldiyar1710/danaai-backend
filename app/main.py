@@ -24,6 +24,7 @@ from app.modules.rag.router import router as rag_router
 from app.modules.safety.router import router as safety_router
 from app.modules.speech.router import router as speech_router
 from app.modules.users.router import router as users_router
+from app.modules.videos.router import router as videos_router
 from app.modules.voice.router import router as voice_router
 
 
@@ -69,6 +70,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(safety_router, prefix=app_settings.api_v1_prefix)
     application.include_router(speech_router, prefix=app_settings.api_v1_prefix)
     application.include_router(users_router, prefix=app_settings.api_v1_prefix)
+    application.include_router(videos_router, prefix=app_settings.api_v1_prefix)
     application.include_router(voice_router, prefix=app_settings.api_v1_prefix)
 
     @application.get("/health", tags=["health"], summary="Process liveness")

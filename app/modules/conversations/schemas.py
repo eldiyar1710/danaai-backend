@@ -5,6 +5,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from app.modules.rag.schemas import CitationValidation, RAGSource
+from app.modules.videos.schemas import VideoSuggestion
 
 
 class ConversationCreate(BaseModel):
@@ -62,4 +63,8 @@ class ChatResponse(BaseModel):
     standalone_query: str | None = Field(
         default=None,
         description="Follow-up question rewritten with conversation history for retrieval",
+    )
+    videos: list[VideoSuggestion] = Field(
+        default_factory=list,
+        description="Approved training videos illustrating the cited instructions",
     )

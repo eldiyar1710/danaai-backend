@@ -26,6 +26,7 @@ from app.modules.knowledge_base.service import KnowledgeBaseService
 from app.modules.rag.reranker import create_reranker
 from app.modules.rag.service import RAGService
 from app.modules.users.models import User
+from app.modules.videos.service import VideoMatcher
 
 logger = structlog.get_logger(__name__)
 router = APIRouter(tags=["conversations"])
@@ -40,7 +41,9 @@ def service(
         settings, cast(AsyncQdrantClient, request.app.state.qdrant)
     )
     rag = RAGService(settings, knowledge_base, create_reranker(settings))
-    return ConversationService(session, rag, OpenAIResponsesClient(settings))
+    return ConversationService(
+        session, rag, OpenAIResponsesClient(settings), VideoMatcher(session, settings)
+    )
 
 
 @router.post("/conversations", response_model=ConversationResponse, status_code=201)

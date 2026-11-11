@@ -8,6 +8,7 @@ from app.modules.organizations.models import Organization
 from app.modules.safety.models import EmployeeSafetyProfile, EmployeeSafetyStage, EmployeeWorkScope
 from app.modules.settings.models import AISettings
 from app.modules.users.models import User
+from app.modules.videos.models import SafetyVideo, SafetyVideoDocument
 
 __all__ = [
     "AISettings",
@@ -24,5 +25,7 @@ __all__ = [
     "Organization",
     "ProcessingJob",
     "RefreshSession",
+    "SafetyVideo",
+    "SafetyVideoDocument",
     "User",
 ]

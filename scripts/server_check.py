@@ -138,6 +138,14 @@ class Checker:
             "org_admin cannot list organizations -> 403",
             self.get("/organizations", admin).status_code == 403,
         )
+        videos = self.get("/videos", admin)
+        approved = (
+            [v for v in videos.json() if v["status"] == "approved"]
+            if videos.status_code == 200
+            else []
+        )
+        self.check("GET /videos (admin)", videos.status_code == 200, videos.text[:120])
+        print(f"      approved videos: {len(approved)}")
         safety = self.get("/safety/employees", admin)
         self.check("GET /safety/employees (admin)", safety.status_code == 200, safety.text[:120])
 
@@ -199,6 +207,10 @@ class Checker:
                     for s in data.get("sources", [])
                 ],
                 "citations_valid": data["citation_validation"]["valid"],
+                "videos": [
+                    {"title": v["title"], "score": v["score"], "stream_url": v["stream_url"]}
+                    for v in data.get("videos", [])
+                ],
                 "model": data.get("model"),
                 "latency_s": latency,
             }
@@ -229,6 +241,14 @@ class Checker:
                         bool(entry.get("standalone_query")),
                         "standalone_query is null",
                     )
+        with_video = [a for a in self.answers if a.get("videos")]
+        for entry in with_video[:1]:
+            played = self.client.get(
+                entry["videos"][0]["stream_url"], headers={"Range": "bytes=0-1023"}
+            )
+            self.check(
+                "signed video link plays (Range 206)", played.status_code == 206, played.status_code
+            )
         answered = [a for a in self.answers if a.get("status") == "answered" and a.get("model")]
         self.check(
             "answered questions cite sources",
@@ -315,6 +335,8 @@ def run(args: argparse.Namespace) -> int:
         print(f"   [{entry['status']}, {entry['latency_s']} s] {entry['answer']}")
         for source in entry["sources"]:
             print(f"   {source['citation']}: {source['title']} / {source['section'] or '-'}")
+        for video in entry.get("videos", []):
+            print(f"   VIDEO: {video['title']} (score {video['score']})")
 
     failed = [r for r in checker.results if not r["ok"]]
     print(f"\n{len(checker.results) - len(failed)}/{len(checker.results)} checks passed")
