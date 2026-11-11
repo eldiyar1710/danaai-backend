@@ -1,3 +1,4 @@
+import asyncio
 from typing import Any
 from uuid import uuid4
 
@@ -8,6 +9,36 @@ from app.core.config import Settings
 
 class EmbeddingProviderError(RuntimeError):
     pass
+
+
+_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+# 429 with these codes means billing/quota, not a burst: retrying cannot help.
+_NON_RETRYABLE_CODES = {
+    "insufficient_quota",
+    "credit_balance_exhausted",
+    "billing_hard_limit_reached",
+}
+_MAX_ATTEMPTS = 3
+_MAX_BACKOFF_SECONDS = 10.0
+
+
+def _error_codes(response: httpx.Response) -> tuple[str, set[str]]:
+    """Return a display code and every code/type OpenAI reported for the error."""
+    try:
+        error = response.json().get("error") or {}
+    except ValueError:
+        return "unknown", set()
+    values = {str(value) for value in (error.get("code"), error.get("type")) if value}
+    return str(error.get("code") or error.get("type") or "unknown"), values
+
+
+def _retry_after(response: httpx.Response, attempt: int) -> float:
+    header = response.headers.get("retry-after")
+    try:
+        delay = float(header) if header else 2.0**attempt
+    except ValueError:
+        delay = 2.0**attempt
+    return min(max(delay, 0.5), _MAX_BACKOFF_SECONDS)
 
 
 class OpenAIEmbeddingsClient:
@@ -39,25 +70,35 @@ class OpenAIEmbeddingsClient:
             "dimensions": self.settings.embedding_dimension,
             "encoding_format": "float",
         }
-        try:
-            async with httpx.AsyncClient(timeout=self.settings.provider_timeout_seconds) as client:
-                response = await client.post(
-                    url,
-                    headers={
-                        "Authorization": f"Bearer {self._api_key()}",
-                        "Content-Type": "application/json",
-                        "X-Client-Request-Id": str(uuid4()),
-                    },
-                    json=body,
-                )
-        except httpx.HTTPError as exc:
-            raise EmbeddingProviderError("OpenAI embeddings request failed") from exc
-        if response.status_code >= 400:
-            request_id = response.headers.get("x-request-id", "unknown")
-            raise EmbeddingProviderError(
-                f"OpenAI embeddings returned HTTP {response.status_code} "
-                f"(request_id={request_id})"
+        for attempt in range(_MAX_ATTEMPTS):
+            try:
+                async with httpx.AsyncClient(
+                    timeout=self.settings.provider_timeout_seconds
+                ) as client:
+                    response = await client.post(
+                        url,
+                        headers={
+                            "Authorization": f"Bearer {self._api_key()}",
+                            "Content-Type": "application/json",
+                            "X-Client-Request-Id": str(uuid4()),
+                        },
+                        json=body,
+                    )
+            except httpx.HTTPError as exc:
+                raise EmbeddingProviderError("OpenAI embeddings request failed") from exc
+            if response.status_code < 400:
+                break
+            code, codes = _error_codes(response)
+            retryable = response.status_code in _RETRYABLE_STATUS and not (
+                codes & _NON_RETRYABLE_CODES
             )
+            if not retryable or attempt == _MAX_ATTEMPTS - 1:
+                request_id = response.headers.get("x-request-id", "unknown")
+                raise EmbeddingProviderError(
+                    f"OpenAI embeddings returned HTTP {response.status_code} "
+                    f"code={code} (request_id={request_id})"
+                )
+            await asyncio.sleep(_retry_after(response, attempt))
         return self._vectors(response.json(), len(texts))
 
     def _vectors(self, payload: dict[str, Any], expected_count: int) -> list[list[float]]:

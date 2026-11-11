@@ -111,6 +111,13 @@ async def approve_video(
     return await videos.read(await videos.approve(actor, video_id), actor)
 
 
+@router.post("/{video_id}/reprocess", response_model=VideoRead)
+async def reprocess_video(
+    video_id: UUID, actor: User = Depends(admin), videos: VideoService = Depends(service)
+) -> VideoRead:
+    return await videos.read(await videos.reprocess(actor, video_id), actor)
+
+
 @router.post("/{video_id}/archive", response_model=VideoRead)
 async def archive_video(
     video_id: UUID, actor: User = Depends(admin), videos: VideoService = Depends(service)

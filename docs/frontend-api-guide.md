@@ -640,6 +640,11 @@ const video = await api("/api/v1/videos", { method: "POST", body: form });
 Лучший способ улучшить подбор — добавлять в `example_questions` реальные формулировки
 сотрудников, в том числе на казахском.
 
+Если обработка завершилась `failed` из-за временного сбоя (хранилище, провайдер
+эмбеддингов), покажите `error_message` и кнопку «Повторить» —
+`POST /api/v1/videos/{id}/reprocess` запускает обработку заново без повторной загрузки
+файла.
+
 Остальные маршруты: `GET /api/v1/videos?status=approved` (список),
 `POST /api/v1/videos/{id}/archive`, `DELETE /api/v1/videos/{id}` (удаляет и файл).
 
@@ -1197,6 +1202,7 @@ async function apiError(response: Response): Promise<Error> {
 - `GET /api/v1/videos/{video_id}`
 - `PATCH /api/v1/videos/{video_id}`
 - `POST /api/v1/videos/{video_id}/approve`
+- `POST /api/v1/videos/{video_id}/reprocess`
 - `POST /api/v1/videos/{video_id}/archive`
 - `DELETE /api/v1/videos/{video_id}`
 

@@ -12,6 +12,7 @@ import jwt
 import structlog
 from fastapi import HTTPException, UploadFile, status
 from minio import Minio
+from minio.error import S3Error
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from urllib3 import BaseHTTPResponse
@@ -299,6 +300,27 @@ class VideoService:
         await self.session.refresh(video)
         return video
 
+    async def reprocess(self, actor: User, video_id: UUID) -> SafetyVideo:
+        """Run media processing again, e.g. after a storage or provider outage."""
+        video = await self._get_admin(actor, video_id)
+        if video.status not in {VideoStatus.FAILED, VideoStatus.READY}:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Video cannot be reprocessed in status {video.status.value}",
+            )
+        exists = await asyncio.to_thread(self._object_exists, video.minio_path)
+        if not exists:
+            raise HTTPException(
+                status_code=409,
+                detail="The uploaded file is missing from storage; delete and upload again",
+            )
+        video.status = VideoStatus.PROCESSING
+        video.error_message = None
+        await self.session.commit()
+        await self.session.refresh(video)
+        celery_app.send_task("videos.process", args=[str(video.id)])
+        return video
+
     async def archive(self, actor: User, video_id: UUID) -> SafetyVideo:
         video = await self._get_admin(actor, video_id)
         video.status = VideoStatus.ARCHIVED
@@ -400,6 +422,15 @@ class VideoService:
             self.storage.make_bucket(bucket)
         file.file.seek(0)
         self.storage.put_object(bucket, path, file.file, size, content_type=mime_type)
+
+    def _object_exists(self, path: str) -> bool:
+        try:
+            self.storage.stat_object(self.settings.minio_videos_bucket, path)
+        except S3Error as exc:
+            if exc.code in {"NoSuchKey", "NoSuchObject", "NoSuchBucket"}:
+                return False
+            raise
+        return True
 
     def _remove(self, paths: Sequence[str]) -> None:
         for path in paths:

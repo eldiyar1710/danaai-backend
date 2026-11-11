@@ -176,50 +176,75 @@ def run(args: argparse.Namespace) -> int:
             for video in client.get(f"{prefix}/videos", headers=headers, params=params).json()
         }
         for card in CARDS:
-            if card.title in existing:
-                print(f"SKIP  {card.title} (already exists: {existing[card.title]['status']})")
-                continue
-            path = videos_dir / card.filename
-            if not path.is_file():
-                print(f"MISS  {card.title}: file {path} not found")
-                failures += 1
+            current = existing.get(card.title)
+            video: dict[str, Any] | None = None
+            if current is not None and current["status"] == "failed":
+                print(f"RETRY {card.title}: {current.get('error_message') or 'failed'}")
+                retried = client.post(f"{prefix}/videos/{current['id']}/reprocess", headers=headers)
+                if retried.status_code == 200:
+                    video = retried.json()
+                else:
+                    client.delete(f"{prefix}/videos/{current['id']}", headers=headers)
+                    current = None
+            elif current is not None:
+                print(f"SKIP  {card.title} (already exists: {current['status']})")
                 continue
             linked = _find_documents(documents, card.instructions)
-            if not linked:
-                print(f"WARN  {card.title}: instructions {card.instructions} not uploaded yet")
-            # httpx sends list values as repeated multipart fields.
-            data: dict[str, Any] = {
-                "title": card.title,
-                "description": card.description,
-                "language": card.language,
-                "example_questions": card.example_questions,
-                "linked_document_ids": linked,
-                **org_form,
-            }
-            with path.open("rb") as handle:
-                response = client.post(
-                    f"{prefix}/videos",
-                    headers=headers,
-                    data=data,
-                    files={"file": (path.name, handle, "video/mp4")},
-                )
-            if response.status_code != 201:
-                print(f"FAIL  {card.title}: HTTP {response.status_code} {response.text[:200]}")
-                failures += 1
-                continue
-            video = response.json()
+            if video is None:
+                video = _upload(client, prefix, headers, videos_dir, card, linked, org_form)
+                if video is None:
+                    failures += 1
+                    continue
             video = _wait(client, prefix, headers, video["id"], args.job_timeout)
             if video["status"] != "ready":
                 print(f"FAIL  {card.title}: {video['status']} {video.get('error_message') or ''}")
                 failures += 1
                 continue
-            if (card.approve or args.approve_all) and linked:
+            if (card.approve or args.approve_all) and video["linked_document_ids"]:
                 approved = client.post(f"{prefix}/videos/{video['id']}/approve", headers=headers)
                 state = "approved" if approved.status_code == 200 else approved.text[:200]
             else:
                 state = f"ready ({card.note or 'not linked to an instruction'})"
             print(f"OK    {card.title}: {state}, {video['duration_seconds']} s")
     return 1 if failures else 0
+
+
+def _upload(
+    client: httpx.Client,
+    prefix: str,
+    headers: dict[str, str],
+    videos_dir: Path,
+    card: Card,
+    linked: list[str],
+    org_form: dict[str, str],
+) -> dict[str, Any] | None:
+    path = videos_dir / card.filename
+    if not path.is_file():
+        print(f"MISS  {card.title}: file {path} not found")
+        return None
+    if not linked:
+        print(f"WARN  {card.title}: instructions {card.instructions} not uploaded yet")
+    # httpx sends list values as repeated multipart fields.
+    data: dict[str, Any] = {
+        "title": card.title,
+        "description": card.description,
+        "language": card.language,
+        "example_questions": card.example_questions,
+        "linked_document_ids": linked,
+        **org_form,
+    }
+    with path.open("rb") as handle:
+        response = client.post(
+            f"{prefix}/videos",
+            headers=headers,
+            data=data,
+            files={"file": (path.name, handle, "video/mp4")},
+        )
+    if response.status_code != 201:
+        print(f"FAIL  {card.title}: HTTP {response.status_code} {response.text[:200]}")
+        return None
+    uploaded: dict[str, Any] = response.json()
+    return uploaded
 
 
 def _wait(
