@@ -71,7 +71,7 @@ Frontend после `GET /api/v1/auth/me` должен строить меню �
 
 ```json
 {
-  "email": "user@semyzbay.kz",
+  "email": "user@danaai.kz",
   "password": "user-password"
 }
 ```
@@ -95,7 +95,7 @@ Frontend после `GET /api/v1/auth/me` должен строить меню �
 {
   "id": "uuid",
   "organization_id": "uuid",
-  "email": "user@semyzbay.kz",
+  "email": "user@danaai.kz",
   "first_name": "Demo",
   "last_name": "User",
   "role": "user",
@@ -865,7 +865,7 @@ async function getMySafety(accessToken: string): Promise<EmployeeSafety> {
 {
   "user_id": "2165cf25-7e8e-4bd0-bddc-c26cc9a63258",
   "organization_id": "bb0c8469-ac67-46c2-9858-5ab7d9acd709",
-  "email": "bagzhan.tolepbergen@semyzbay.kz",
+  "email": "bagzhan.tolepbergen@danaai.kz",
   "first_name": "Багжан",
   "last_name": "Толепберген",
   "personnel_number": "DEMO-EL-001",
@@ -1062,9 +1062,9 @@ function canPerform(employee: EmployeeSafety, activityCode: string): boolean {
 
 | Сотрудник | Должность | Логин | Ожидаемый статус |
 |---|---|---|---|
-| Багжан Толепберген | Электрик | `bagzhan.tolepbergen@semyzbay.kz` | `partial`, 4/5; высота заблокирована |
-| Абай Кождан | Сварщик | `abai.kozhdan@semyzbay.kz` | `allowed`, 5/5 |
-| Нуртас Бакбергенов | Водитель | `nurtas.bakbergenov@semyzbay.kz` | `blocked`, 0/5 |
+| Багжан Толепберген | Электрик | `bagzhan.tolepbergen@danaai.kz` | `partial`, 4/5; высота заблокирована |
+| Абай Кождан | Сварщик | `abai.kozhdan@danaai.kz` | `allowed`, 5/5 |
+| Нуртас Бакбергенов | Водитель | `nurtas.bakbergenov@danaai.kz` | `blocked`, 0/5 |
 
 Общий локальный пароль: `DanaAI-Demo-2026!`. Эти учётные данные предназначены только для
 демонстрации и не должны использоваться для реальных сотрудников или production.

@@ -9,7 +9,7 @@ specialist has signed it off.
 
 Usage::
 
-    SEED_EMAIL=orgadmin@semyzbay.kz python scripts/seed_safety_videos.py \\
+    SEED_EMAIL=orgadmin@danaai.kz python scripts/seed_safety_videos.py \\
         --base-url https://api.danaai.kz --videos-dir TB/videos
 
 The script is idempotent: a card whose title already exists is skipped.

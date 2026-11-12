@@ -188,12 +188,12 @@ def main() -> None:
             organization_name=args.organization_name,
             organization_description=args.organization_description,
             super_admin=_identity(
-                "SUPER_ADMIN", "superadmin@semyzbay.kz", "System", "Administrator"
+                "SUPER_ADMIN", "superadmin@danaai.kz", "System", "Administrator"
             ),
             org_admin=_identity(
-                "ORG_ADMIN", "orgadmin@semyzbay.kz", "Organization", "Administrator"
+                "ORG_ADMIN", "orgadmin@danaai.kz", "Organization", "Administrator"
             ),
-            user=_identity("USER", "user@semyzbay.kz", "Demo", "User"),
+            user=_identity("USER", "user@danaai.kz", "Demo", "User"),
         )
     except ValidationError as exc:
         raise SystemExit(str(exc)) from exc

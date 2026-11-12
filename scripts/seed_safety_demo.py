@@ -59,7 +59,7 @@ class EmployeeSeed:
 
 EMPLOYEES = (
     EmployeeSeed(
-        email="bagzhan.tolepbergen@semyzbay.kz",
+        email="bagzhan.tolepbergen@danaai.kz",
         first_name="Багжан",
         last_name="Толепберген",
         personnel_number="DEMO-EL-001",
@@ -101,7 +101,7 @@ EMPLOYEES = (
         ),
     ),
     EmployeeSeed(
-        email="abai.kozhdan@semyzbay.kz",
+        email="abai.kozhdan@danaai.kz",
         first_name="Абай",
         last_name="Кождан",
         personnel_number="DEMO-WD-002",
@@ -139,7 +139,7 @@ EMPLOYEES = (
         ),
     ),
     EmployeeSeed(
-        email="nurtas.bakbergenov@semyzbay.kz",
+        email="nurtas.bakbergenov@danaai.kz",
         first_name="Нуртас",
         last_name="Бакбергенов",
         personnel_number="DEMO-DR-003",

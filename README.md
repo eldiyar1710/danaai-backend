@@ -81,8 +81,8 @@ For a local organization with one user per role, run the idempotent interactive 
 make seed-users
 ```
 
-It creates `Semyzbay Demo` plus `superadmin@semyzbay.kz`,
-`orgadmin@semyzbay.kz`, and `user@semyzbay.kz`. Passwords are entered without echo.
+It creates `Semyzbay Demo` plus `superadmin@danaai.kz`,
+`orgadmin@danaai.kz`, and `user@danaai.kz`. Passwords are entered without echo.
 Repeated runs preserve existing passwords; pass `--reset-passwords` directly to
 `scripts/seed_users.py` when an intentional reset is required. CI can provide passwords via
 `SEED_SUPER_ADMIN_PASSWORD`, `SEED_ORG_ADMIN_PASSWORD`, and `SEED_USER_PASSWORD`.
@@ -198,7 +198,7 @@ production reverse proxy in front of the API needs the same.
 The five work-at-height clips and their cards are seeded with:
 
 ```bash
-SEED_EMAIL=orgadmin@semyzbay.kz python scripts/seed_safety_videos.py --videos-dir TB/videos
+SEED_EMAIL=orgadmin@danaai.kz python scripts/seed_safety_videos.py --videos-dir TB/videos
 ```
 
 Clips 1-4 are approved. Clip 5 (transfer with two lanyards) stays in review because the
@@ -216,7 +216,7 @@ files in MinIO:
 
 ```bash
 docker compose up -d --build
-REINDEX_EMAIL=orgadmin@semyzbay.kz python scripts/reindex_documents.py
+REINDEX_EMAIL=orgadmin@danaai.kz python scripts/reindex_documents.py
 ```
 
 Run the reindex once per organization (a `super_admin` passes `--organization-id`). Approval
@@ -243,7 +243,7 @@ mapped to instruction numbers from `TB/`. With the stack running and documents u
 высоте") and approved:
 
 ```bash
-EVAL_EMAIL=orgadmin@semyzbay.kz make eval EVAL_ARGS="--min-hit-rate 0.8 --output tmp/eval.json"
+EVAL_EMAIL=orgadmin@danaai.kz make eval EVAL_ARGS="--min-hit-rate 0.8 --output tmp/eval.json"
 ```
 
 The script uses only `POST /rag/retrieve`, so it spends embedding but not generation tokens.

@@ -7,7 +7,7 @@ become searchable again as soon as their job succeeds.
 
 Usage (an org_admin reindexes its organization; a super_admin passes --organization-id)::
 
-    REINDEX_EMAIL=orgadmin@semyzbay.kz python scripts/reindex_documents.py
+    REINDEX_EMAIL=orgadmin@danaai.kz python scripts/reindex_documents.py
 
 Only ``POST /auth/login``, ``GET /documents``, ``POST /documents/{id}/reindex`` and
 ``GET /documents/{id}/status`` are called. Exits with status 1 if any job fails.

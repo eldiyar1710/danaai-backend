@@ -12,7 +12,7 @@ one fragment must also appear in a relevant source text.
 
 Usage::
 
-    EVAL_EMAIL=orgadmin@semyzbay.kz EVAL_PASSWORD=... \\
+    EVAL_EMAIL=orgadmin@danaai.kz EVAL_PASSWORD=... \\
         python scripts/evaluate_rag.py --dataset evaluation/datasets/tb_starter.jsonl
 
 The script calls ``POST /auth/login`` and ``POST /rag/retrieve`` only, so it never spends
