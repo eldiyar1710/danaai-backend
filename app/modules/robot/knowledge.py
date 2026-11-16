@@ -7,6 +7,7 @@ from pathlib import Path
 
 from app.modules.documents.chunker import chunk_blocks
 from app.modules.documents.parser import parse_document
+from app.modules.robot.approval import ApprovedDocument, load_approvals, verified_approval
 
 _WORD = re.compile(r"[0-9A-Za-z\u0400-\u04FF]{3,}")
 _STOPWORDS = {
@@ -85,7 +86,7 @@ def _stem(word: str) -> str:
     return word
 
 
-def resolve_knowledge_dir(directory: str) -> Path:
+def resolve_project_path(directory: str) -> Path:
     path = Path(directory)
     if path.is_absolute():
         return path
@@ -95,18 +96,35 @@ def resolve_knowledge_dir(directory: str) -> Path:
     return path
 
 
-def load_knowledge(directory: Path, *, chunk_size: int, chunk_overlap: int) -> UniversityKnowledge:
+def load_knowledge(
+    directory: Path,
+    *,
+    approvals: dict[str, ApprovedDocument],
+    chunk_size: int,
+    chunk_overlap: int,
+) -> UniversityKnowledge:
     passages: list[Passage] = []
     if directory.is_dir():
-        for path in sorted(directory.glob("*.pdf")):
-            passages.extend(_passages_from_pdf(path, chunk_size, chunk_overlap))
+        for name, approval in sorted(approvals.items()):
+            path = directory / name
+            if verified_approval(path, approval):
+                passages.extend(
+                    passage
+                    for passage in _passages_from_pdf(path, chunk_size, chunk_overlap)
+                    if passage.page in approval.pages
+                )
     return UniversityKnowledge(passages)
 
 
 @lru_cache(maxsize=1)
-def cached_knowledge(directory: str, chunk_size: int, chunk_overlap: int) -> UniversityKnowledge:
+def cached_knowledge(
+    directory: str, approval_manifest: str, chunk_size: int, chunk_overlap: int
+) -> UniversityKnowledge:
     return load_knowledge(
-        resolve_knowledge_dir(directory), chunk_size=chunk_size, chunk_overlap=chunk_overlap
+        resolve_project_path(directory),
+        approvals=load_approvals(resolve_project_path(approval_manifest)),
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
     )
 
 

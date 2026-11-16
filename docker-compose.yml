@@ -62,7 +62,10 @@ x-app-environment: &app-environment
   ELEVENLABS_VOICE_ID: ${ELEVENLABS_VOICE_ID:-}
   ROBOT_API_KEY: ${ROBOT_API_KEY:-}
   KNOWLEDGE_DIR: /app/knowledge
-  ROBOT_APPROVED_PDFS: ${ROBOT_APPROVED_PDFS:-}
+  ROBOT_APPROVAL_MANIFEST: /app/robot-approval.json
+  ROBOT_REQUESTS_PER_MINUTE: ${ROBOT_REQUESTS_PER_MINUTE:-20}
+  ROBOT_INDEX_PATH: /app/.cache/fastembed/robot-semantic-index.json
+  ROBOT_MIN_SIMILARITY: ${ROBOT_MIN_SIMILARITY:-0.4}
   ELEVENLABS_OUTPUT_FORMAT: ${ELEVENLABS_OUTPUT_FORMAT:-mp3_44100_128}
   MAX_AUDIO_UPLOAD_SIZE_BYTES: ${MAX_AUDIO_UPLOAD_SIZE_BYTES:-26214400}
   MAX_VIDEO_UPLOAD_SIZE_BYTES: ${MAX_VIDEO_UPLOAD_SIZE_BYTES:-524288000}
@@ -96,6 +99,7 @@ services:
     volumes:
       - fastembed_cache:/app/.cache/fastembed
       - ./knowledge:/app/knowledge:ro
+      - ./robot-approval.json:/app/robot-approval.json:ro
     depends_on:
       semyzbay-postgres:
         condition: service_healthy

@@ -102,7 +102,10 @@ class Settings(BaseSettings):
     default_language: Literal["kk", "ru", "en"] = "ru"
     knowledge_dir: str = "knowledge"
     robot_api_key: SecretStr | None = None
-    robot_approved_pdfs: str = ""
+    robot_approval_manifest: str = "robot-approval.json"
+    robot_requests_per_minute: int = Field(default=20, ge=1, le=600)
+    robot_index_path: str = ".cache/robot-semantic-index.json"
+    robot_min_similarity: float = Field(default=0.4, ge=0, le=1)
 
     @field_validator("api_v1_prefix")
     @classmethod

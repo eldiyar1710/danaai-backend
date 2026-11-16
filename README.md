@@ -8,18 +8,45 @@ document store. Run `uvicorn app.robot_server:app --host 127.0.0.1 --port 18000`
 for an isolated university API. Its OpenAPI schema is at
 `http://127.0.0.1:18000/openapi.json`, with `POST /api/v1/robot/text` and
 `POST /api/v1/robot/audio`. Both routes require `X-API-Key` matching
-`ROBOT_API_KEY`; the service fails closed if the key is unset. Set
-`KNOWLEDGE_DIR` to the absolute path of the PDF folder and explicitly list
-reviewed files in `ROBOT_APPROVED_PDFS` (comma-separated, for example
-`23.pdf,25.pdf`). `5.pdf` and the catalog are always excluded. Answers without
-valid numbered citations fall back to an uncertainty response.
+`ROBOT_API_KEY`; the service fails closed if the key is unset and limits calls
+with `ROBOT_REQUESTS_PER_MINUTE`. Set `KNOWLEDGE_DIR` to the absolute PDF folder.
+`robot-approval.json` lists reviewed pages and the exact SHA-256 of each PDF.
+It is empty by default; `5.pdf` and the catalog cannot be approved. After the
+document owner approves pages, run `python -m scripts.build_robot_index` and
+check `/ready`. Changes to the PDFs or approvals require rebuilding the index
+and restarting the API. The server validates exact supporting quotes before
+adding source markers; unsupported output falls back to an uncertainty response.
 
 The API accepts uploaded microphone recordings and returns base64 audio from
 ElevenLabs or the configured fallback. It does not yet capture G1 microphone
 multicast or call Unitree AudioClient to play the reply. Those adapters require
-access to the actual robot and its audio API. The lexical PDF search and source
-review gate are a prototype; evaluate Kazakh/Russian retrieval and approve
-individual documents before public use.
+access to the actual robot and its audio API. Semantic retrieval and evidence
+validation still require a reviewed Kazakh/Russian evaluation set and real
+microphone testing before public use.
+
+### G1 audio bridge
+
+`robot_client/g1_bridge.py` is a separate Linux client for the robot-side PC2.
+It uses the official Unitree Python SDK's `AudioClient.PlayStream` and the G1
+microphone multicast (`239.168.123.161:5555`, 16 kHz mono PCM). It does not
+issue movement commands. Install the SDK and `ffmpeg` on PC2, connect PC2 and
+the AI host to the G1 network, and verify the SDK/audio firmware on the actual
+robot. The AI host must expose its authenticated port only on the isolated robot
+interface. The bridge accepts HTTPS or plain HTTP only to `192.168.123.0/24`.
+The transport follows the [official Python AudioClient](https://github.com/unitreerobotics/unitree_sdk2_python/blob/master/unitree_sdk2py/g1/audio/g1_audio_client.py)
+and [C++ microphone example](https://github.com/unitreerobotics/unitree_sdk2/blob/main/example/g1/audio/g1_audio_client_example.cpp).
+
+```bash
+export ROBOT_API_KEY='set-locally-on-PC2'
+python -m robot_client.g1_bridge \
+  --server http://192.168.123.222:18000 \
+  --interface eth0 --interface-ipv4 192.168.123.164
+```
+
+The interface name and IPv4 above are examples; inspect the real PC2 before
+running. Start with `--input-wav question.wav --output-audio answer.mp3` to test
+the API without the microphone or speaker. Tune the microphone energy threshold
+on the actual device and test playback volume before unattended operation.
 
 Production-oriented modular FastAPI backend for the Semyzbay occupational-safety assistant
 (DanaAI, assistant persona "Kurbanali"). It answers employees' safety questions in Kazakh,
