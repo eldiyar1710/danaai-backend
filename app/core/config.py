@@ -106,6 +106,9 @@ class Settings(BaseSettings):
     robot_requests_per_minute: int = Field(default=20, ge=1, le=600)
     robot_index_path: str = ".cache/robot-semantic-index.json"
     robot_min_similarity: float = Field(default=0.4, ge=0, le=1)
+    robot_embedding_provider: Literal["local", "openai"] = "local"
+    robot_local_embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    robot_local_model_cache: str = ".cache/robot-models"
 
     @field_validator("api_v1_prefix")
     @classmethod

@@ -11,7 +11,8 @@ for an isolated university API. Its OpenAPI schema is at
 `ROBOT_API_KEY`; the service fails closed if the key is unset and limits calls
 with `ROBOT_REQUESTS_PER_MINUTE`. Set `KNOWLEDGE_DIR` to the absolute PDF folder.
 `robot-approval.json` lists reviewed pages and the exact SHA-256 of each PDF.
-It is empty by default; `5.pdf` and the catalog cannot be approved. After the
+The owner approved all pages of files 1–25 except `5.pdf` on 2026-11-16;
+`5.pdf` and the catalog cannot be approved. After the
 document owner approves pages, run `python -m scripts.build_robot_index` and
 check `/ready`. Changes to the PDFs or approvals require rebuilding the index
 and restarting the API. The server validates exact supporting quotes before

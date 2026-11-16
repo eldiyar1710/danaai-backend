@@ -1,15 +1,21 @@
 """Checksum-bound semantic index for the reviewed university pages."""
 
+import asyncio
 import hashlib
 import json
 import math
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from typing import Protocol
 
 from app.core.config import Settings
 from app.integrations.openai_embeddings import OpenAIEmbeddingsClient
 from app.modules.robot.knowledge import Passage, UniversityKnowledge
+
+
+class Embeddings(Protocol):
+    async def embed(self, texts: list[str]) -> list[list[float]]: ...
 
 
 def fingerprint(passages: list[Passage]) -> str:
@@ -27,7 +33,7 @@ class SemanticIndex:
         self,
         question: str,
         passages: list[Passage],
-        embeddings: OpenAIEmbeddingsClient,
+        embeddings: Embeddings,
         *,
         limit: int,
         min_score: float,
@@ -51,12 +57,17 @@ class SemanticIndex:
 async def build_index(settings: Settings, knowledge: UniversityKnowledge, output: Path) -> int:
     if not knowledge.passages:
         raise ValueError("No approved passages to index")
-    vectors = await OpenAIEmbeddingsClient(settings).embed([p.text for p in knowledge.passages])
+    provider = embedding_provider(settings)
+    vectors: list[list[float]] = []
+    for offset in range(0, len(knowledge.passages), 32):
+        vectors.extend(
+            await provider.embed([p.text for p in knowledge.passages[offset : offset + 32]])
+        )
     payload = {
         "version": 1,
         "fingerprint": fingerprint(knowledge.passages),
-        "model": settings.embedding_model,
-        "dimension": settings.embedding_dimension,
+        "model": robot_model(settings),
+        "dimension": robot_dimension(settings),
         "vectors": vectors,
     }
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -64,6 +75,43 @@ async def build_index(settings: Settings, knowledge: UniversityKnowledge, output
     temporary.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
     temporary.replace(output)
     return len(vectors)
+
+
+class LocalEmbeddings:
+    def __init__(self, model: str, cache: str) -> None:
+        from fastembed import TextEmbedding
+
+        self.model = TextEmbedding(model_name=model, cache_dir=cache)
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        return await asyncio.to_thread(
+            lambda: [vector.tolist() for vector in self.model.embed(texts, batch_size=16)]
+        )
+
+
+@lru_cache(maxsize=2)
+def _local_provider(model: str, cache: str) -> LocalEmbeddings:
+    return LocalEmbeddings(model, cache)
+
+
+def embedding_provider(settings: Settings) -> Embeddings:
+    if settings.robot_embedding_provider == "local":
+        return _local_provider(
+            settings.robot_local_embedding_model, settings.robot_local_model_cache
+        )
+    return OpenAIEmbeddingsClient(settings)
+
+
+def robot_model(settings: Settings) -> str:
+    return (
+        settings.robot_local_embedding_model
+        if settings.robot_embedding_provider == "local"
+        else settings.embedding_model
+    )
+
+
+def robot_dimension(settings: Settings) -> int:
+    return 384 if settings.robot_embedding_provider == "local" else settings.embedding_dimension
 
 
 @lru_cache(maxsize=2)

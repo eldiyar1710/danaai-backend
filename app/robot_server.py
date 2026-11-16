@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException
 from app.core.config import get_settings
 from app.modules.robot.knowledge import cached_knowledge, resolve_project_path
 from app.modules.robot.router import router
-from app.modules.robot.semantic import fingerprint, load_index
+from app.modules.robot.semantic import fingerprint, load_index, robot_dimension, robot_model
 
 
 def create_robot_app() -> FastAPI:
@@ -39,8 +39,8 @@ def create_robot_app() -> FastAPI:
         index = load_index(
             str(resolve_project_path(settings.robot_index_path)),
             fingerprint(knowledge.passages),
-            settings.embedding_model,
-            settings.embedding_dimension,
+            robot_model(settings),
+            robot_dimension(settings),
             len(knowledge.passages),
         )
         if index is None:

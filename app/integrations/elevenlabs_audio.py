@@ -1,5 +1,6 @@
 import base64
 import json
+import re
 from typing import Any
 from urllib.parse import urlencode, urlparse, urlunparse
 
@@ -113,7 +114,9 @@ class ElevenLabsAudioClient:
                 while True:
                     event = self._event(await websocket.recv())
                     if event.get("error"):
-                        raise AudioProviderError("ElevenLabs speech generation failed")
+                        raw_code = str(event.get("code") or "unknown")
+                        code = re.sub(r"[^a-zA-Z0-9_.-]", "", raw_code)[:80]
+                        raise AudioProviderError(f"ElevenLabs speech error: {code}")
                     if event.get("audio"):
                         audio_chunks.append(base64.b64decode(str(event["audio"])))
                     if event.get("is_final"):

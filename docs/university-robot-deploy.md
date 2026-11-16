@@ -46,6 +46,11 @@ if any PDF changes.
 The `sha256` must match the exact PDF in `knowledge/`. `5.pdf` and the catalog
 are rejected by the loader. Run the index builder after review:
 
+The robot index uses local multilingual FastEmbed by default. Download the
+model once on the AI host or transfer its cache; indexing and search do not
+send PDF passages to OpenAI. `OPENAI_API_KEY` is still required for answer
+generation, and ElevenLabs/OpenAI audio providers need active billing.
+
 ```powershell
 .\.venv\Scripts\python.exe -m scripts.build_robot_index
 .\.venv\Scripts\python.exe -m uvicorn app.robot_server:app --host 127.0.0.1 --port 18000
