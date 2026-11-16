@@ -60,6 +60,9 @@ x-app-environment: &app-environment
   ELEVENLABS_STT_MODEL: ${ELEVENLABS_STT_MODEL:-scribe_v2}
   ELEVENLABS_TTS_MODEL: ${ELEVENLABS_TTS_MODEL:-eleven_v4_turbo}
   ELEVENLABS_VOICE_ID: ${ELEVENLABS_VOICE_ID:-}
+  ROBOT_API_KEY: ${ROBOT_API_KEY:-}
+  KNOWLEDGE_DIR: /app/knowledge
+  ROBOT_APPROVED_PDFS: ${ROBOT_APPROVED_PDFS:-}
   ELEVENLABS_OUTPUT_FORMAT: ${ELEVENLABS_OUTPUT_FORMAT:-mp3_44100_128}
   MAX_AUDIO_UPLOAD_SIZE_BYTES: ${MAX_AUDIO_UPLOAD_SIZE_BYTES:-26214400}
   MAX_VIDEO_UPLOAD_SIZE_BYTES: ${MAX_VIDEO_UPLOAD_SIZE_BYTES:-524288000}
@@ -92,6 +95,7 @@ services:
       - "127.0.0.1:${API_PORT:-8000}:8000"
     volumes:
       - fastembed_cache:/app/.cache/fastembed
+      - ./knowledge:/app/knowledge:ro
     depends_on:
       semyzbay-postgres:
         condition: service_healthy

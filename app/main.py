@@ -21,6 +21,7 @@ from app.modules.documents.router import router as documents_router
 from app.modules.knowledge_base.router import router as knowledge_base_router
 from app.modules.organizations.router import router as organizations_router
 from app.modules.rag.router import router as rag_router
+from app.modules.robot.router import router as robot_router
 from app.modules.safety.router import router as safety_router
 from app.modules.speech.router import router as speech_router
 from app.modules.users.router import router as users_router
@@ -72,6 +73,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(users_router, prefix=app_settings.api_v1_prefix)
     application.include_router(videos_router, prefix=app_settings.api_v1_prefix)
     application.include_router(voice_router, prefix=app_settings.api_v1_prefix)
+    application.include_router(robot_router, prefix=app_settings.api_v1_prefix)
 
     @application.get("/health", tags=["health"], summary="Process liveness")
     async def health() -> dict[str, str]:

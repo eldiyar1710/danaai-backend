@@ -100,6 +100,9 @@ class Settings(BaseSettings):
     storage_retention_days: int = Field(default=365, ge=1)
     healthcheck_timeout_seconds: float = Field(default=3, gt=0, le=30)
     default_language: Literal["kk", "ru", "en"] = "ru"
+    knowledge_dir: str = "knowledge"
+    robot_api_key: SecretStr | None = None
+    robot_approved_pdfs: str = ""
 
     @field_validator("api_v1_prefix")
     @classmethod

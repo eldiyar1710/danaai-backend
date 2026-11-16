@@ -1,5 +1,26 @@
 # Semyzbay Backend
 
+## University robot prototype
+
+The university PDFs and robot API live in this repository under `knowledge/` and
+`app/modules/robot/`. This is separate from the Semyzbay occupational-safety
+document store. Run `uvicorn app.robot_server:app --host 127.0.0.1 --port 18000`
+for an isolated university API. Its OpenAPI schema is at
+`http://127.0.0.1:18000/openapi.json`, with `POST /api/v1/robot/text` and
+`POST /api/v1/robot/audio`. Both routes require `X-API-Key` matching
+`ROBOT_API_KEY`; the service fails closed if the key is unset. Set
+`KNOWLEDGE_DIR` to the absolute path of the PDF folder and explicitly list
+reviewed files in `ROBOT_APPROVED_PDFS` (comma-separated, for example
+`23.pdf,25.pdf`). `5.pdf` and the catalog are always excluded. Answers without
+valid numbered citations fall back to an uncertainty response.
+
+The API accepts uploaded microphone recordings and returns base64 audio from
+ElevenLabs or the configured fallback. It does not yet capture G1 microphone
+multicast or call Unitree AudioClient to play the reply. Those adapters require
+access to the actual robot and its audio API. The lexical PDF search and source
+review gate are a prototype; evaluate Kazakh/Russian retrieval and approve
+individual documents before public use.
+
 Production-oriented modular FastAPI backend for the Semyzbay occupational-safety assistant
 (DanaAI, assistant persona "Kurbanali"). It answers employees' safety questions in Kazakh,
 Russian, and English, by text or voice, strictly from approved organization documents with
